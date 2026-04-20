@@ -1,0 +1,28 @@
+node_modules/
+dist/
+build/
+.cache/
+*.log
+*.tsbuildinfo
+
+# Cloned Unity repos (large)
+data/repos/
+data/*.db
+
+# Baked export artifacts (regenerated from source scenes)
+data/unity-export/
+
+# Ad-hoc debug captures
+debug-*.png
+_logs/
+
+# Env
+.env
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

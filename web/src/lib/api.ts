@@ -1,0 +1,368 @@
+/**
+ * Matches `SceneCategory` on the server:
+ * - `production` — shipping scene under `GameContents/...`
+ * - `dev-only`  — sandbox scene under `DevAssets(not packed)/_DevArt/...`
+ */
+export type SceneCategory = 'production' | 'dev-only';
+
+export interface SceneListItem {
+  name: string;
+  relPath: string;
+  category: SceneCategory;
+}
+
+export interface InlineMeshData {
+  /** Base64-encoded Float32Array of XYZ positions (already in Three.js space:
+   *  X is flipped server-side so the client can use the buffer as-is). */
+  positionsB64: string;
+  /** Base64-encoded Uint32Array of triangle indices (winding reversed). */
+  indicesB64: string;
+  vertexCount: number;
+  indexCount: number;
+  aabb?: {
+    min: [number, number, number];
+    max: [number, number, number];
+  };
+}
+
+export interface SceneJson {
+  name: string;
+  relPath: string;
+  roots: GameObjectNode[];
+  stats: {
+    totalGameObjects: number;
+    renderedMeshes: number;
+    lights: number;
+    cameras: number;
+    prefabInstances: number;
+    inlineMeshes: number;
+    materials: number;
+  };
+  /** Scene-embedded Mesh documents (ProBuilder, procedural, …), keyed by
+   *  Unity fileID. `renderer.inlineMeshFileID` points into this map. */
+  inlineMeshes: Record<string, InlineMeshData>;
+  /** Resolved PBR materials by GUID. `renderer.materialGuids[i]` looks up
+   *  a MaterialJson entry here. May be empty when the scene references only
+   *  materials that don't exist in the repo. */
+  materials: Record<string, MaterialJson>;
+  /**
+   * Per-FBX `ModelImporter.externalObjects` material remap:
+   * `fbxExternalMaterials[fbxGuid][embeddedMaterialName] = matGuid`. Used
+   * by the renderer to fill MeshRenderer slots the scene left empty — by
+   * pairing these with the FBX-internal material names the FBXLoader reads
+   * out of the binary, we reproduce what Unity does at edit time.
+   */
+  fbxExternalMaterials: Record<string, Record<string, string>>;
+  /**
+   * Project-wide `.mat` name→guid lookup. Reproduces Unity's
+   * `MaterialSearch.RecursiveUp` — when an FBX embeds a material name that
+   * isn't in `externalObjects`, the renderer looks up the matching
+   * `<name>.mat` asset by this index.
+   */
+  materialNameIndex: Record<string, string>;
+  /** Scene-level render settings — ambient, fog, skybox reference. */
+  renderSettings: SceneRenderSettings;
+}
+
+export interface MaterialJson {
+  guid: string;
+  name: string;
+  shaderKind: 'lit' | 'unlit' | 'unknown';
+  shaderName?: string;
+
+  baseColor: [number, number, number, number];
+  baseMapGuid: string | null;
+  baseMapTiling: [number, number] | null;
+  baseMapOffset: [number, number] | null;
+
+  normalMapGuid: string | null;
+  normalScale: number;
+
+  metallic: number;
+  smoothness: number;
+  metallicGlossMapGuid: string | null;
+
+  occlusionMapGuid: string | null;
+  occlusionStrength: number;
+
+  emissionColor: [number, number, number];
+  emissionMapGuid: string | null;
+
+  renderMode: 'Opaque' | 'Cutout' | 'Transparent' | 'Fade';
+  alphaCutoff: number;
+  doubleSided: boolean;
+}
+
+export interface SceneRenderSettings {
+  ambientMode: 'Skybox' | 'Trilight' | 'Flat' | 'Custom';
+  ambientSkyColor: [number, number, number, number];
+  ambientEquatorColor: [number, number, number, number];
+  ambientGroundColor: [number, number, number, number];
+  ambientLight: [number, number, number, number];
+  ambientIntensity: number;
+
+  fogEnabled: boolean;
+  fogMode: 'Linear' | 'Exponential' | 'ExponentialSquared';
+  fogColor: [number, number, number, number];
+  fogDensity: number;
+  fogStart: number;
+  fogEnd: number;
+
+  indirectIntensity: number;
+  skyboxMaterialGuid?: string;
+}
+
+export interface GameObjectNode {
+  name: string;
+  active: boolean;
+  fileID: string;
+  /** Server-computed hint: this GameObject lives under a physics-only
+   *  hierarchy (name or ancestor matches `_col` / `collider`). The viewer
+   *  hides these sub-trees by default; toggled on via the HUD for physics
+   *  debugging. See `markColliderTrees` in `sceneParser.ts`. */
+  isCollider: boolean;
+  transform: {
+    position: [number, number, number];
+    quaternion: [number, number, number, number];
+    eulerHint: [number, number, number];
+    scale: [number, number, number];
+    /** When true, the server's scene YAML authoritatively set this node's
+     *  rotation (via a Transform doc or a PrefabInstance `m_LocalRotation.*`
+     *  modification). When false, the node inherits whatever rotation its
+     *  source prefab exposes — and for synth'd FBX model prefabs that means
+     *  we still need to apply the FBX file's own root rotation (typically
+     *  a 3ds Max Z→Y-up PreRotation) at render time. */
+    hasRotationOverride: boolean;
+  };
+  renderer?: {
+    /** Mirror of Unity's `MeshRenderer.m_Enabled`. When false, the viewer
+     *  suppresses the draw unless the "Show colliders / disabled" HUD
+     *  toggle is on. */
+    enabled: boolean;
+    color: [number, number, number, number];
+    mainTexGuid?: string;
+    materialGuids: string[];
+    meshGuid?: string;
+    meshName?: string;
+    meshFileID?: string;
+    meshSubmeshName?: string;
+    builtinMesh?: 'Cube' | 'Sphere' | 'Cylinder' | 'Capsule' | 'Plane' | 'Quad';
+    /** Key into `SceneJson.inlineMeshes` when the MeshFilter references a
+     *  scene-embedded `!u!43 Mesh` document (e.g. ProBuilder geometry). */
+    inlineMeshFileID?: string;
+  };
+  light?: {
+    type: 'Directional' | 'Point' | 'Spot' | 'Area' | 'Unknown';
+    color: [number, number, number, number];
+    intensity: number;
+    range?: number;
+    spotAngle?: number;
+  };
+  camera?: {
+    fov: number;
+    near: number;
+    far: number;
+  };
+  children: GameObjectNode[];
+}
+
+export async function apiGet<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return (await res.json()) as T;
+}
+
+export async function apiPost<T>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return (await res.json()) as T;
+}
+
+export function textureUrl(guid: string): string {
+  return `/api/assets/texture?guid=${encodeURIComponent(guid)}`;
+}
+
+export async function fetchLevels(): Promise<SceneListItem[]> {
+  return apiGet<SceneListItem[]>('/api/levels');
+}
+
+export async function fetchScene(relPath: string): Promise<SceneJson | UnityExport> {
+  // relPath can contain slashes; each segment must be encoded individually so
+  // express sees `/api/levels/<relPath>` correctly.
+  const encoded = relPath.split('/').map(encodeURIComponent).join('/');
+  return apiGet<SceneJson | UnityExport>(`/api/levels/${encoded}`);
+}
+
+// ===========================================================================
+// Unity batch export — high-fidelity renderer format
+// ===========================================================================
+//
+// Produced by the Unity Editor script (LevelViewerExporter.cs) running in
+// batchmode. Coordinate system already matches three.js (X flipped, indices
+// winding-reversed) so clients can construct BufferGeometries directly from
+// the base64 buffers without further transform.
+
+export interface UnityExport {
+  format: 'unity-export@1';
+  generator: string;
+  exportedAt: string;
+  scenePath: string;
+  sceneName: string;
+  render: UnityRenderSettings;
+  nodes: UnityNode[];
+  meshes: Record<string, UnityMesh>;
+  materials: Record<string, UnityMaterial>;
+  textureGuids: string[];
+}
+
+export interface UnityRenderSettings {
+  ambientMode: string;
+  ambientSkyColor: [number, number, number, number] | null;
+  ambientEquatorColor: [number, number, number, number] | null;
+  ambientGroundColor: [number, number, number, number] | null;
+  ambientLight: [number, number, number, number] | null;
+  ambientIntensity: number;
+  fogEnabled: boolean;
+  fogColor: [number, number, number, number] | null;
+  /** "Linear" | "Exponential" | "ExponentialSquared" */
+  fogMode: string;
+  fogDensity: number;
+  fogStart: number;
+  fogEnd: number;
+  skyboxMaterialGuid: string | null;
+  skyboxShaderName: string | null;
+}
+
+export interface UnityNode {
+  id: number;
+  parentId: number;
+  name: string;
+  active: boolean;
+  layer: number;
+  tag: string;
+  position: [number, number, number];
+  rotation: [number, number, number, number];
+  scale: [number, number, number];
+  mesh?: UnityMeshRef;
+  light?: UnityLight;
+  camera?: UnityCamera;
+}
+
+export interface UnityMeshRef {
+  meshId: string;
+  materialIds: (string | null)[];
+  castShadows: string;
+  receiveShadows: boolean;
+  lightmapIndex: number;
+  lightmapScaleOffset: [number, number, number, number];
+}
+
+export interface UnityLight {
+  /** Unity's LightType: "Directional" | "Point" | "Spot" | "Area" | "Disc" */
+  type: string;
+  color: [number, number, number, number];
+  intensity: number;
+  range: number;
+  spotAngle: number;
+  innerSpotAngle: number;
+  /** "None" | "Hard" | "Soft" */
+  shadows: string;
+  shadowStrength: number;
+  colorTemperature: number;
+  useColorTemperature: boolean;
+  bounce: number;
+  /** "Realtime" | "Mixed" | "Baked" */
+  lightmapBakeType: string;
+}
+
+export interface UnityCamera {
+  fov: number;
+  near: number;
+  far: number;
+  orthographic: boolean;
+  orthoSize: number;
+  clearFlags: string;
+  backgroundColor: [number, number, number, number];
+}
+
+export interface UnityMesh {
+  name: string;
+  sourceAssetPath: string | null;
+  isBaked: boolean;
+  vertexCount: number;
+  indexCount: number;
+  positionsB64: string;
+  normalsB64: string | null;
+  tangentsB64: string | null;
+  uv0B64: string | null;
+  uv1B64: string | null;
+  colorsB64: string | null;
+  indicesB64: string;
+  aabbMin: [number, number, number];
+  aabbMax: [number, number, number];
+  submeshes: UnitySubmesh[];
+}
+
+export interface UnitySubmesh {
+  start: number;
+  count: number;
+  topology: string;
+}
+
+export interface UnityMaterial {
+  name: string;
+  guid: string | null;
+  shader: string | null;
+  renderMode: 'Opaque' | 'Cutout' | 'Transparent' | 'Fade';
+  cull: 'Back' | 'Front' | 'Off';
+  baseColor: [number, number, number, number];
+  baseMapGuid: string | null;
+  baseMapTiling: [number, number] | null;
+  baseMapOffset: [number, number] | null;
+  normalMapGuid: string | null;
+  normalScale: number;
+  metallic: number;
+  smoothness: number;
+  metallicGlossMapGuid: string | null;
+  smoothnessFromAlbedoAlpha: boolean;
+  occlusionMapGuid: string | null;
+  occlusionStrength: number;
+  emissionColor: [number, number, number, number];
+  emissionMapGuid: string | null;
+  alphaCutoff: number;
+  doubleSided: boolean;
+  extra?: Record<string, unknown>;
+}
+
+export function isUnityExport(scene: SceneJson | UnityExport): scene is UnityExport {
+  return (scene as UnityExport).format === 'unity-export@1';
+}
+
+export interface BatchStatus {
+  state: 'idle' | 'running' | 'success' | 'failed';
+  relPath?: string;
+  startedAt?: number;
+  finishedAt?: number;
+  durationMs?: number;
+  outPath?: string;
+  logPath?: string;
+  error?: string;
+}
+
+export async function triggerRebake(relPath: string): Promise<{ queued: boolean; status: BatchStatus }> {
+  return apiPost(`/api/rebake?relPath=${encodeURIComponent(relPath)}`);
+}
+
+export async function fetchRebakeStatus(): Promise<BatchStatus> {
+  return apiGet<BatchStatus>('/api/rebake/status');
+}
