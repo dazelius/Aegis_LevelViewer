@@ -17,7 +17,7 @@ import type {
   SceneRenderSettings,
 } from './api';
 import { textureUrl } from './api';
-import { loadFbxGeometry } from './fbxCache';
+import { loadFbx, loadFbxGeometry, type FbxEntry } from './fbxCache';
 
 // ---------------------------------------------------------------- Selection ----
 //
@@ -480,6 +480,27 @@ function SceneNode({ node }: { node: GameObjectNode }) {
   const { setSelection } = useContext(SelectionContext);
   const { showColliders } = useContext(SceneContext);
 
+  // Targeted diagnostic: log once per mount for any node flagged for the
+  // multi-mesh FBX expansion path, or for the F_Sample root specifically. This
+  // tells us whether the tree even visits that GameObject — if this log is
+  // silent but other RendererProxy logs fire, the node is being filtered out
+  // by an active/collider short-circuit above the renderer dispatch.
+  if (node.renderer?.renderAllFbxMeshes || node.name === 'F_Sample') {
+    const tq = node.transform.quaternion;
+    const tp = node.transform.position;
+    const ts = node.transform.scale;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[scene-node] ${node.name} active=${node.active} isCollider=${node.isCollider} ` +
+        `hasRenderer=${!!node.renderer} renderAllFbxMeshes=${node.renderer?.renderAllFbxMeshes} ` +
+        `meshGuid=${node.renderer?.meshGuid?.slice(0, 8)} enabled=${node.renderer?.enabled} ` +
+        `hasRotOverride=${node.transform.hasRotationOverride} ` +
+        `pos=(${tp[0].toFixed(3)},${tp[1].toFixed(3)},${tp[2].toFixed(3)}) ` +
+        `quat=(${tq[0].toFixed(3)},${tq[1].toFixed(3)},${tq[2].toFixed(3)},${tq[3].toFixed(3)}) ` +
+        `scale=(${ts[0].toFixed(3)},${ts[1].toFixed(3)},${ts[2].toFixed(3)})`,
+    );
+  }
+
   if (!node.active) return null;
 
   // Collider sub-trees are physics-only proxies — duplicate geometry the
@@ -642,11 +663,27 @@ function SceneNode({ node }: { node: GameObjectNode }) {
       onClick={onClick}
     >
       {node.renderer && !rendererHidden && (
-        <RendererProxy
-          renderer={node.renderer}
-          gameObjectName={node.name}
-          hasRotationOverride={node.transform.hasRotationOverride}
-        />
+        node.renderer.renderAllFbxMeshes && node.renderer.meshGuid ? (
+          // "Whole FBX dragged into the scene" path. The server synthesised
+          // a single-root proxy for a PrefabInstance whose source is a
+          // model prefab (.fbx / .obj); the client fetches the FBX and
+          // re-inflates one mesh per node, preserving each node's FBX-
+          // local transform. Without this, a level authored as a single
+          // `.fbx` (Mirama's `F_Sample.fbx`) collapses to whichever
+          // sub-mesh FBXLoader visited first and the rest of the geometry
+          // is missing from the scene entirely.
+          <MultiMeshRendererProxy
+            renderer={node.renderer}
+            gameObjectName={node.name}
+            hasRotationOverride={node.transform.hasRotationOverride}
+          />
+        ) : (
+          <RendererProxy
+            renderer={node.renderer}
+            gameObjectName={node.name}
+            hasRotationOverride={node.transform.hasRotationOverride}
+          />
+        )
       )}
       {node.light && <NodeLight light={node.light} fileID={node.fileID} />}
       {node.children.map((child, idx) => (
@@ -870,6 +907,399 @@ function DirectionalLightWithTarget({
 }
 
 // ---------------------------------------------------------------- Renderer ----
+
+/**
+ * Hook: load an entire FBX entry (all meshes, not just one sub-mesh). Mirrors
+ * `useFbxGeometry`'s lifecycle — returns `{ entry, status }` with React state
+ * transitions so the caller can render a loading placeholder or an error
+ * marker without resorting to `Suspense`.
+ */
+function useFbxEntry(guid: string | undefined): {
+  entry: FbxEntry | null;
+  status: FbxLoadStatus;
+} {
+  const [state, setState] = useState<{
+    entry: FbxEntry | null;
+    status: FbxLoadStatus;
+  }>({ entry: null, status: guid ? 'pending' : 'idle' });
+
+  useEffect(() => {
+    if (!guid) {
+      setState({ entry: null, status: 'idle' });
+      return;
+    }
+    setState({ entry: null, status: 'pending' });
+    let cancelled = false;
+    loadFbx(guid)
+      .then((e) => {
+        if (cancelled) return;
+        if (e.status === 'ready') {
+          setState({ entry: e, status: 'ready' });
+        } else {
+          console.warn(
+            `[fbx-multi] failed guid=${guid} status=${e.status}${e.reason ? ' reason=' + e.reason : ''}`,
+          );
+          setState({ entry: null, status: 'failed' });
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn(
+          `[fbx-multi] threw guid=${guid} err=${err instanceof Error ? err.message : String(err)}`,
+        );
+        setState({ entry: null, status: 'failed' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guid]);
+
+  return state;
+}
+
+/**
+ * Renderer for a "whole FBX as PrefabInstance" node. The server synthesises
+ * a single `GameObjectNode` for these (it can't walk the FBX's binary
+ * hierarchy itself), then flags it with `renderAllFbxMeshes=true`. Here on
+ * the client we have FBXLoader's parsed scene available, so we expand the
+ * proxy into one `<mesh>` per FBX node, each at its FBX-local transform.
+ *
+ * Material resolution is name-based per sub-mesh — Rule B from the
+ * single-mesh renderer:
+ *   1. `fbxExternalMaterials[meshGuid][fbxName]` (from the FBX's
+ *      `ModelImporter.externalObjects` remap in the .meta)
+ *   2. `materialNameIndex[fbxName]` (project-wide `.mat` RecursiveUp
+ *      search fallback — reproduces Unity's default material search when
+ *      the .meta doesn't explicitly remap a name)
+ *
+ * `renderer.materialGuids` is intentionally ignored here: the server
+ * leaves it empty for model-prefab roots because a flat array can't
+ * correctly map to an N-node hierarchy where each node exposes its own
+ * MeshRenderer with its own m_Materials. Scene-level per-sub-node
+ * overrides would require hashed FBX-internal fileIDs (Unity 2022+) which
+ * we don't reverse; see prefabParser's `synthesizeModelPrefab` comment.
+ *
+ * Rotation handling (differs from the single-mesh `RendererProxy`):
+ *
+ * For a multi-mesh model prefab, `Q_scene` is the FINAL rotation of the
+ * expanded root in Unity — whatever m_LocalRotation the scene YAML stored
+ * for this PrefabInstance's root transform. It is applied ON TOP of the
+ * vertex-baked geometry, period. We do NOT use `hasRotationOverride` to
+ * decide whether to unbake here.
+ *
+ * Why: Unity's PrefabInstance `m_Modifications` ALWAYS snapshots the
+ * instance's current m_LocalRotation even when the designer never
+ * touched rotation (it's just how serialization works). Our server
+ * interprets any such entry as `hasRotationOverride=true`, which was
+ * intended to mean "the scene quaternion REPLACES the prefab's default
+ * PreRotation" — but for Unity model prefabs with
+ * `bakeAxisConversion=0`, the prefab-root's default rotation is
+ * ALREADY identity (Unity's ModelImporter put the Z→Y axis conversion
+ * inside the FBX hierarchy / mesh asset level, not on the root
+ * transform). A scene override to identity is therefore a no-op, not a
+ * replacement of anything. Inserting `inv(P)` in that case cancels the
+ * only rotation we applied (the FBX hierarchy bake) and tips the whole
+ * prefab onto its side — exactly what Factory_New_B → F_Sample hit.
+ *
+ * So: render `Q_scene * (scale * (localPos + baked_vertex))` uniformly.
+ * Single-mesh props (`RendererProxy` below) still need the unbake path
+ * because for those the scene-authored quaternion Unity writes DOES
+ * already include the PreRotation contribution — a product of how the
+ * non-expanded MeshRenderer is attached directly to the scene's
+ * GameObject. Keep that path unchanged until we have a concrete
+ * multi-mesh case that proves otherwise.
+ */
+function MultiMeshRendererProxy({
+  renderer,
+  gameObjectName,
+  hasRotationOverride,
+}: {
+  renderer: NonNullable<GameObjectNode['renderer']>;
+  gameObjectName: string;
+  hasRotationOverride: boolean;
+}) {
+  // Render-phase mount trace. Runs EVERY render including the initial
+  // "pending FBX load" one — lets us confirm the dispatch path in
+  // SceneNode reaches here even when `entry` never resolves. The
+  // `[fbx-multi]` useEffect below fires only after `entry` becomes ready,
+  // so a scene that renders silently (Factory_New_B → F_Sample) without
+  // any `[fbx-multi-mount]` line means the component itself is never
+  // being instantiated — i.e. the problem is upstream in SceneNode's
+  // dispatch condition, not in the FBX pipeline.
+  // eslint-disable-next-line no-console
+  console.log(`[fbx-multi-mount] ${gameObjectName} guid=${renderer.meshGuid?.slice(0, 8)}`);
+
+  const {
+    materials,
+    fbxExternalMaterials,
+    materialNameIndex,
+    debugSubmeshColors,
+    debugUvCheckerboard,
+    debugUnlitPreview,
+    debugFlipYOff,
+  } = useContext(SceneContext);
+
+  const { entry, status } = useFbxEntry(renderer.meshGuid);
+
+  const fbxRemap = renderer.meshGuid
+    ? fbxExternalMaterials[renderer.meshGuid]
+    : undefined;
+
+  // Positional explicit material list from the scene/prefab's m_Materials
+  // overrides (after `applyModification` collected `m_Materials.Array.data[N]`
+  // mods into `renderer.materialGuids`). For synth'd model-prefab roots
+  // this is often populated by "root-fallback" mods the prefab system
+  // couldn't route to a real nested GO — for real scene MeshRenderers on
+  // single-mesh FBX props (DesertMine barrels, rocks, buildings) these
+  // ARE the authoritative bindings (Unity's positional submesh → m_Material
+  // mapping). We use them first (Rule A) and fall back to name-based
+  // resolution (Rule B) only when the slot is empty or the GUID isn't in
+  // the materials dict — same priority order as `RendererProxy`.
+  const explicitGuids = renderer.materialGuids ?? [];
+  let lastExplicitGuid = '';
+  for (const g of explicitGuids) if (g && materials[g]) lastExplicitGuid = g;
+
+  // Material resolution for a single FBX-embedded name. Identical to Rule B
+  // in RendererProxy. Extracted here so we can call it per-sub-mesh across
+  // every record in `entry.allMeshes` without rebuilding the closure N times.
+  const resolveMatGuidForName = (fbxName: string): string | undefined => {
+    if (!fbxName) return undefined;
+    const fromRemap = fbxRemap?.[fbxName];
+    if (fromRemap && materials[fromRemap]) return fromRemap;
+    const fromIndex = materialNameIndex[fbxName];
+    if (fromIndex && materials[fromIndex]) return fromIndex;
+    return undefined;
+  };
+
+  // Material resolution strategy depends on whether the FBX has one mesh
+  // or many, because `renderer.materialGuids` only binds authoritatively
+  // to the ROOT's MeshRenderer:
+  //
+  // - Single-mesh FBX (DesertMine barrels, rocks, buildings): the sole
+  //   FBX node IS the root MeshRenderer, so `materialGuids[i]` maps
+  //   directly to submesh `i` of that mesh. Use Rule A (explicit wins)
+  //   then Rule B (FBX name lookup), exactly like `RendererProxy`.
+  //
+  // - Multi-mesh FBX (F_Sample level): Unity creates one child GO per
+  //   FBX node, each with its OWN MeshRenderer and its OWN m_Materials.
+  //   The scene's overrides land on the synth'd root (6 entries for
+  //   F_Sample from our prefab's root-fallback bucket), but those can't
+  //   map positionally to N sibling meshes' M slots each. Name-based
+  //   resolution per submesh is the only consistent binding, with
+  //   `lastExplicitGuid` as a last-resort fallback to avoid magenta.
+  const isMultiMeshEntry = (entry?.allMeshes.length ?? 0) > 1;
+  const resolveGuidForSlot = (submeshIdx: number, fbxName: string): string | undefined => {
+    if (isMultiMeshEntry) {
+      return resolveMatGuidForName(fbxName) ?? (lastExplicitGuid || undefined);
+    }
+    if (explicitGuids.length === 0) return resolveMatGuidForName(fbxName);
+    if (submeshIdx < explicitGuids.length) {
+      const e = explicitGuids[submeshIdx];
+      if (e && materials[e]) return e;
+      return resolveMatGuidForName(fbxName) ?? (lastExplicitGuid || undefined);
+    }
+    return lastExplicitGuid || undefined;
+  };
+
+  // Build (and later dispose) every material we instantiate across all
+  // sub-meshes. We key the list by (meshIndex, slot) so React's strict
+  // dependency check fires a cleanup the moment the FBX guid or any
+  // diagnostic toggle changes. Materials are not shared across sub-meshes
+  // because MeshStandardMaterial / MeshBasicMaterial keep per-texture
+  // state (repeat, offset) that differs from one .mat to another — even
+  // when two sub-meshes happen to bind the same GUID, their tiling may
+  // differ after Unity's material inheritance resolves.
+  const builtMaterials = useMemo<THREE.Material[][]>(() => {
+    if (!entry) return [];
+    const matOpts = {
+      unlitPreview: debugUnlitPreview,
+      flipY: debugFlipYOff ? false : true,
+    };
+    const out: THREE.Material[][] = [];
+    for (const record of entry.allMeshes) {
+      const usedByGeometry = computeUsedMaterialSlotCount(record.geometry);
+      const slotCount =
+        usedByGeometry > 0
+          ? usedByGeometry
+          : Math.max(record.materialNames.length, 1);
+
+      if (debugSubmeshColors) {
+        out.push(buildDebugSlotPalette(slotCount, false));
+        continue;
+      }
+      if (debugUvCheckerboard) {
+        out.push(buildDebugUvMaterials(slotCount, false));
+        continue;
+      }
+
+      const row: THREE.Material[] = [];
+      for (let i = 0; i < slotCount; i += 1) {
+        const fbxName = record.materialNames[i] ?? '';
+        const guid = resolveGuidForSlot(i, fbxName);
+        if (guid) {
+          row.push(buildMaterial(materials[guid], false, matOpts));
+        } else {
+          row.push(buildFallbackMaterial(renderer.color, renderer.mainTexGuid, false));
+        }
+      }
+      out.push(row);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    entry,
+    fbxRemap,
+    materialNameIndex,
+    materials,
+    debugSubmeshColors,
+    debugUvCheckerboard,
+    debugUnlitPreview,
+    debugFlipYOff,
+    renderer.color[0],
+    renderer.color[1],
+    renderer.color[2],
+    renderer.color[3],
+    renderer.mainTexGuid,
+    // Spread explicit list so any change to the scene's m_Materials
+    // overrides re-runs material resolution. Joining keeps the dep as a
+    // single stable string — array identity can flip per render even when
+    // contents are unchanged if the server object is re-created.
+    explicitGuids.join('|'),
+  ]);
+
+  // Mirror RendererProxy's slot-binding snapshot so the Inspector can show
+  // which `.mat` landed on each sub-mesh slot. For multi-mesh we surface
+  // the FIRST mesh's bindings — the Inspector only inspects one mesh per
+  // selected GameObject, and the pick-ray would hit one of these meshes
+  // directly in any case (click handling stays at the SceneNode level).
+  const firstRecordBindings = useMemo<NonNullable<MeshInfoSnapshot['slotBindings']>>(() => {
+    if (!entry || entry.allMeshes.length === 0) return [];
+    const record = entry.allMeshes[0];
+    const out: NonNullable<MeshInfoSnapshot['slotBindings']> = [];
+    for (let i = 0; i < record.materialNames.length; i += 1) {
+      const fbxName = record.materialNames[i] ?? '';
+      const guid = resolveGuidForSlot(i, fbxName) ?? '';
+      const mat = guid ? materials[guid] : undefined;
+      out.push({
+        slot: i,
+        guid,
+        matName: mat?.name ?? '',
+        baseMapGuid: mat?.baseMapGuid ? mat.baseMapGuid.slice(0, 8) : '',
+        fbxEmbeddedName: fbxName,
+      });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry, fbxRemap, materialNameIndex, materials, explicitGuids.join('|')]);
+
+  useEffect(() => {
+    return () => {
+      for (const row of builtMaterials) {
+        for (const m of row) m.dispose();
+      }
+    };
+  }, [builtMaterials]);
+
+  // Diagnostic log (fired whenever the entry resolves to a new FBX). MUST
+  // sit BEFORE any early return so React sees a stable number of hooks
+  // between the "pending" render and the "ready" render — otherwise we hit
+  //   "Rendered more hooks than during the previous render"
+  // when FBX load finishes and the component promotes from the pending
+  // placeholder path to the full mesh list path.
+  //
+  // `hasRotationOverride` is logged for visibility but no longer gates any
+  // unbake behaviour (see the component docstring).
+  useEffect(() => {
+    if (!entry) return;
+    const g0 = entry.allMeshes[0]?.geometry;
+    const bb = g0?.boundingBox;
+    const firstHasBakeLog = entry.allMeshes[0]?.hasBakedRotation ?? false;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[fbx-multi] ${gameObjectName} guid=${renderer.meshGuid?.slice(0, 8)} ` +
+        `meshes=${entry.allMeshes.length} unitScale=${entry.unitScale} ` +
+        `rotOverride=${hasRotationOverride} firstHasBake=${firstHasBakeLog} ` +
+        `bbox=${bb ? `(${bb.min.x.toFixed(1)},${bb.min.y.toFixed(1)},${bb.min.z.toFixed(1)})..(${bb.max.x.toFixed(1)},${bb.max.y.toFixed(1)},${bb.max.z.toFixed(1)})` : 'n/a'}`,
+    );
+  }, [entry, gameObjectName, renderer.meshGuid, hasRotationOverride]);
+
+  if (!renderer.meshGuid) return null;
+  if (status === 'pending') return null;
+  if (status === 'failed' || !entry) {
+    // Permanent failure — draw a small magenta wireframe cube so the
+    // object isn't silently absent. Matches the marker RendererProxy
+    // uses for the single-mesh failure case.
+    return (
+      <mesh key="fbx-multi-failed">
+        <boxGeometry args={[0.2, 0.2, 0.2]} />
+        <meshBasicMaterial color={0xff00ff} wireframe />
+      </mesh>
+    );
+  }
+
+  const unitScale = entry.unitScale;
+  const isSingleMesh = entry.allMeshes.length === 1;
+
+  // Mesh list rendered uniformly inside whatever outer wrappers the
+  // rotation-override branch picks. Materials / slot-bindings attach to
+  // the first record (only one Inspector picks per selected GameObject).
+  //
+  // `isSingleMesh` case: skip the per-mesh `localPosition`/`localScale`
+  // wrapper entirely and render the mesh at the `unitScale`-scaled group
+  // origin. This reproduces the OLD single-mesh path exactly — the one
+  // every scene prop (barrels, rocks, props in DesertMine) was working
+  // under before we introduced the multi-mesh expansion. Unity's model
+  // importer, when an FBX has a single mesh, already places that mesh's
+  // transform at the synthesized GameObject's origin, so any non-zero
+  // `matrixWorld.position` from FBXLoader comes from an intermediate
+  // "Null" parent node that Unity itself collapses. Applying those
+  // offsets would visibly displace single-mesh props from the scene
+  // position authored in Unity. Only when the FBX has genuinely multiple
+  // meshes (F_Sample) do we need per-sub-mesh placement.
+  const meshes = entry.allMeshes.map((record, idx) => {
+    const row = builtMaterials[idx];
+    if (!row || row.length === 0) return null;
+    const materialProp: THREE.Material | THREE.Material[] =
+      row.length === 1 ? row[0] : row;
+    const slotBindings = idx === 0 ? firstRecordBindings : undefined;
+    if (isSingleMesh) {
+      // No localPosition/localScale wrapper; matches the single-mesh
+      // RendererProxy's output structure modulo material-source.
+      return (
+        <mesh
+          key={`fbx-sub-${idx}`}
+          geometry={record.geometry}
+          material={materialProp}
+          name={record.meshName || `submesh_${idx}`}
+          userData={slotBindings ? { slotBindings } : undefined}
+        />
+      );
+    }
+    return (
+      <group
+        // Records are stable-by-reference across renders (fbxCache
+        // returns the same FbxEntry for a given guid), so index keys
+        // are sufficient.
+        key={`fbx-sub-${idx}`}
+        position={record.localPosition}
+        scale={record.localScale}
+        name={record.meshName || `submesh_${idx}`}
+      >
+        <mesh
+          geometry={record.geometry}
+          material={materialProp}
+          userData={slotBindings ? { slotBindings } : undefined}
+        />
+      </group>
+    );
+  });
+
+  return (
+    <group scale={[unitScale, unitScale, unitScale]} name={`${gameObjectName}__fbxRoot`}>
+      {meshes}
+    </group>
+  );
+}
 
 function RendererProxy({
   renderer,

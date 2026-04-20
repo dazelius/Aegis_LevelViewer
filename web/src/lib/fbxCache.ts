@@ -66,15 +66,57 @@ export interface FbxMeshRecord {
    *  renderer can skip the inverse-rotation wrapper group entirely for
    *  the common case). */
   hasBakedRotation: boolean;
+  /** Name of the FBX Object3D this geometry came from. Used by the
+   *  multi-mesh rendering path to label children and as a fallback when
+   *  two records share a BufferGeometry (shared-geometry meshes). */
+  meshName: string;
+  /** Translation component of this mesh node's FBX-hierarchy `matrixWorld`,
+   *  expressed in FBX file units (NOT yet scaled to metres — the renderer
+   *  applies `unitScale` at the group level so these numbers multiply
+   *  correctly).
+   *
+   *  Required for the "render all meshes" path used by model-prefab
+   *  PrefabInstances (scenes that drag an FBX in directly). Unity expands
+   *  the FBX into one GameObject per node, each carrying that node's
+   *  local transform; we have to reproduce that placement client-side
+   *  because the server has no FBX parser of its own. Without this, every
+   *  sub-mesh would pile up at the prefab origin and levels authored as
+   *  a single `.fbx` (e.g. Mirama Factory's `F_Sample.fbx`) would render
+   *  as a jumbled heap. */
+  localPosition: [number, number, number];
+  /** Scale component of this mesh node's FBX-hierarchy `matrixWorld`.
+   *  Typically `(1,1,1)` for untouched DCC exports but non-trivial when
+   *  the modeller used non-uniform node-level scales. Dimensionless — the
+   *  outer FBX unit conversion is applied separately by the renderer. */
+  localScale: [number, number, number];
 }
 
 export interface FbxEntry {
   /** All mesh geometries + material-name tables found in the FBX,
    *  keyed by Object3D.name. */
   geometryByName: Map<string, FbxMeshRecord>;
+  /** Secondary index keyed by a *normalised* name where every `.`, `:`, `/`,
+   *  `[`, `]` has been replaced with `_`. three.js FBXLoader runs model
+   *  names through `PropertyBinding.sanitizeNodeName`, which collapses all
+   *  of those characters to underscores before setting `Object3D.name`. That
+   *  means a mesh authored in 3ds Max / Blender as `SM_WallParts_E.001`
+   *  comes back out as `SM_WallParts_E_001` on the three.js side — so a
+   *  scene GameObject literally named `SM_WallParts_E.001_003` (Unity
+   *  happily preserves the dot) would never hit the primary map even
+   *  though the right sub-mesh exists. We build a second map of the
+   *  normalised spellings so the resolver can try both forms and the
+   *  fuzzy matcher can compare apples to apples. */
+  geometryByNormalizedName: Map<string, FbxMeshRecord>;
   /** The first mesh record we encountered while traversing, used as a
    *  fallback when `submeshName` isn't provided or doesn't match anything. */
   first: FbxMeshRecord | null;
+  /** Every mesh record in FBX traversal order, including duplicates with
+   *  the same Object3D.name (which `geometryByName` would collapse). Used
+   *  by the multi-mesh rendering path for model-prefab PrefabInstances,
+   *  where the scene references an FBX as a whole and the viewer has to
+   *  instantiate every sub-mesh at its own FBX-local transform. For
+   *  ordinary single-submesh props this list has length 1. */
+  allMeshes: FbxMeshRecord[];
   /** Scale factor the FBXLoader applied to the root Group based on the
    *  FBX file's `UnitScaleFactor`. We lose this when we extract just the
    *  BufferGeometry, so we store it here and the renderer re-applies it as
@@ -310,6 +352,8 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
   // FBXLoader already had oriented correctly are unaffected.
   root.updateMatrixWorld(true);
   const geometryByName = new Map<string, FbxMeshRecord>();
+  const geometryByNormalizedName = new Map<string, FbxMeshRecord>();
+  const allMeshes: FbxMeshRecord[] = [];
   let first: FbxMeshRecord | null = null;
   const bakedGeoms = new WeakSet<THREE.BufferGeometry>();
   const _tmpPos = new THREE.Vector3();
@@ -433,17 +477,46 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
       }
     }
 
+    // Snapshot translation + scale the same way we snapshotted rotation.
+    // matrixWorld.decompose already ran above (to get _tmpQuat); we reuse
+    // _tmpPos / _tmpScl here rather than decomposing a second time.
+    //
+    // FBXLoader does NOT apply `unitScaleFactor` to any Object3D, so these
+    // numbers are in the FBX file's native units (typically centimetres
+    // for 3ds Max / Maya cm-mode). The multi-mesh renderer applies the
+    // cm→m conversion once at the group level so these values multiply
+    // into world space cleanly.
+    const localPosition: [number, number, number] = [_tmpPos.x, _tmpPos.y, _tmpPos.z];
+    const localScale: [number, number, number] = [_tmpScl.x, _tmpScl.y, _tmpScl.z];
+
     const record: FbxMeshRecord = {
       geometry: g,
       materialNames,
       bakedRotation,
       hasBakedRotation: !isIdentityRot,
+      meshName: obj.name ?? '',
+      localPosition,
+      localScale,
     };
 
     if (!first) first = record;
     if (obj.name && !geometryByName.has(obj.name)) {
       geometryByName.set(obj.name, record);
     }
+    if (obj.name) {
+      const norm = normalizeFbxName(obj.name);
+      // Populate the normalised map in full — callers use it as the
+      // canonical comparison index, so a missing entry here would make
+      // dot-containing query names unresolvable even when the raw FBX
+      // spelling and sanitised spelling coincide.
+      if (!geometryByNormalizedName.has(norm)) {
+        geometryByNormalizedName.set(norm, record);
+      }
+    }
+    // Keep every mesh in FBX-traversal order so `renderAllFbxMeshes` can
+    // instantiate duplicates-by-name too. `geometryByName` intentionally
+    // collapses them; `allMeshes` keeps them.
+    allMeshes.push(record);
   });
 
   disposeUnusedFbxResources(root);
@@ -455,7 +528,37 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
     return settle(empty('error', 'no mesh geometry found in FBX'));
   }
 
-  return settle({ geometryByName, first, unitScale: rootScale, status: 'ready' });
+  return settle({
+    geometryByName,
+    geometryByNormalizedName,
+    first,
+    allMeshes,
+    unitScale: rootScale,
+    status: 'ready',
+  });
+}
+
+/**
+ * Reproduce the character set that three.js `FBXLoader` strips when it
+ * assigns `Object3D.name` from an FBX model attrName.
+ *
+ * Empirically — confirmed against a live dump of `F_Sample.fbx` — FBXLoader
+ * **deletes** `.` entirely rather than replacing it with `_`. So a mesh
+ * authored in the DCC as `SM_WallParts_E.001` comes back out as
+ * `SM_WallParts_E001`, and `SM_Bottom_01.001` becomes `SM_Bottom_01001`.
+ * This is *not* what `THREE.PropertyBinding.sanitizeNodeName` does (that
+ * one replaces with `_`); FBXLoader has its own parser path that simply
+ * skips the character.
+ *
+ * We strip the same characters here so both the FBX's own keys and the
+ * scene-side query names end up in the exact same spelling. Getting this
+ * wrong was why `.NNN` wall variants kept falling through to the short
+ * base mesh (`SM_WallParts_E`) — the normalised query produced `_001`
+ * but the normalised FBX key was `001`, so the lookup missed and the
+ * longest-prefix scan picked the shorter name.
+ */
+function normalizeFbxName(name: string): string {
+  return name.replace(/[\[\]\.:\/\s]/g, '');
 }
 
 /**
@@ -487,7 +590,15 @@ function withSilencedWarnings<T>(fn: () => T): T {
 }
 
 function empty(status: FbxStatus, reason?: string): FbxEntry {
-  return { geometryByName: new Map(), first: null, unitScale: 1, status, reason };
+  return {
+    geometryByName: new Map(),
+    geometryByNormalizedName: new Map(),
+    first: null,
+    allMeshes: [],
+    unitScale: 1,
+    status,
+    reason,
+  };
 }
 
 export function loadFbx(guid: string): Promise<FbxEntry> {
@@ -525,14 +636,117 @@ export function findGeometryInFbx(
   fallbackName?: string,
 ): FbxMeshRecord | null {
   if (submeshName) {
-    const hit = entry.geometryByName.get(submeshName);
+    const hit = lookupName(entry, submeshName);
     if (hit) return hit;
   }
   if (fallbackName && fallbackName !== submeshName) {
-    const hit = entry.geometryByName.get(fallbackName);
+    const hit = lookupName(entry, fallbackName);
     if (hit) return hit;
+    const fuzzy = findGeometryByFuzzyName(entry, fallbackName);
+    if (fuzzy) return fuzzy;
   }
   return entry.first;
+}
+
+/**
+ * Single source of truth for "look up a record by whatever name the caller
+ * has". Tries the primary map first (FBXs *can* carry a literal `.` in a
+ * mesh name when the exporter didn't route through Unity), then falls back
+ * to the normalised map so names that got dot-mangled on either side of
+ * the three.js sanitiser still match.
+ */
+function lookupName(entry: FbxEntry, name: string): FbxMeshRecord | null {
+  const direct = entry.geometryByName.get(name);
+  if (direct) return direct;
+  const norm = normalizeFbxName(name);
+  if (norm !== name) {
+    const normHit = entry.geometryByNormalizedName.get(norm);
+    if (normHit) return normHit;
+  }
+  return null;
+}
+
+/**
+ * Attempt to resolve a GameObject's name against an FBX's mesh table when the
+ * exact name didn't hit.
+ *
+ * Why we need this:
+ *   When a level designer unpacks an FBX prefab in the scene (i.e. the FBX's
+ *   per-sub-mesh GameObjects are promoted to native scene objects) and then
+ *   duplicates those GameObjects, Unity appends `_NNN` / ` (NN)` suffixes.
+ *   For FBXs imported with `fileIdsGeneration: 2` (Unity 2022+ stable hashed
+ *   IDs) the .meta's `internalIDToNameTable` is empty, so the server can't
+ *   hand us an authoritative `submeshName` and we fall through to the native
+ *   GameObject's own name. That name is `SM_WallParts_B_013`, but the FBX
+ *   exports the mesh as `SM_WallParts_B`.
+ *
+ * Strategy (ordered, first match wins):
+ *   1. Strip Unity's `_NNN` duplicate suffix.
+ *   2. Strip Blender's `.NNN` duplicate suffix.
+ *   3. Strip a trailing `_Mirror` / ` (Mirror)` adornment (common when the
+ *      designer horizontally mirrored the instance).
+ *   4. Apply combinations of the above in turn.
+ *   5. As a last resort, longest-prefix match against the FBX's mesh names
+ *      so `SM_Factory_EMdoor_A_002` still finds `SM_Factory_EMdoor_A`.
+ *
+ * We deliberately keep this pure name-munging and resist reverse-engineering
+ * Unity's SpookyHashV2-based stable fileID. The fuzzy strategy handles every
+ * unpacked scene we've seen in practice and stays readable; if it ever isn't
+ * enough we can always follow up with a proper hash-based lookup.
+ */
+function findGeometryByFuzzyName(
+  entry: FbxEntry,
+  raw: string,
+): FbxMeshRecord | null {
+  // Build a candidate set by exhaustively applying every combination of
+  // the three strip rules. We can't walk cur→strip→cur iteratively because
+  // doing so drops intermediate forms: e.g. `SM_WallParts_E.001_003` →
+  // stripUnity → `SM_WallParts_E.001` → stripBlender → `SM_WallParts_E`
+  // all in one iteration, so the intermediate `SM_WallParts_E.001` (which
+  // is an actual FBX mesh name!) never gets pushed. Applying each rule
+  // independently and transitively closes the candidate set.
+  const stripUnitySuffix = (s: string) => s.replace(/_\d{1,4}$/u, '');
+  const stripBlenderSuffix = (s: string) => s.replace(/\.\d{1,4}$/u, '');
+  const stripMirror = (s: string) => s.replace(/(?:_Mirror|\s*\(Mirror\))$/u, '');
+
+  const candidates = new Set<string>();
+  const frontier: string[] = [raw];
+  while (frontier.length > 0) {
+    const cur = frontier.pop() as string;
+    if (cur.length === 0 || candidates.has(cur)) continue;
+    candidates.add(cur);
+    const a = stripUnitySuffix(cur);
+    if (a !== cur) frontier.push(a);
+    const b = stripBlenderSuffix(cur);
+    if (b !== cur) frontier.push(b);
+    const c = stripMirror(cur);
+    if (c !== cur) frontier.push(c);
+  }
+
+  candidates.delete(raw);
+  for (const cand of candidates) {
+    const hit = lookupName(entry, cand);
+    if (hit) return hit;
+  }
+
+  // Longest-prefix fallback. Compare against the *normalised* FBX names so
+  // a scene GO like `SM_WallParts_E.001_003` can hit the FBX mesh whose
+  // three.js-stripped name is `SM_WallParts_E001` (authored as
+  // `SM_WallParts_E.001` in the DCC). Without the normalisation both sides
+  // collapse to the shortest common base (`SM_WallParts_E`), which is why
+  // every `.NNN` wall variant was rendering with the wrong sub-mesh before.
+  const rawNorm = normalizeFbxName(raw);
+  let best: FbxMeshRecord | null = null;
+  let bestLen = 0;
+  for (const [name, rec] of entry.geometryByNormalizedName) {
+    if (name.length <= bestLen) continue;
+    if (!rawNorm.startsWith(name)) continue;
+    const next = rawNorm.charAt(name.length);
+    if (next !== '' && next !== '_' && next !== '.' && next !== ' ') continue;
+    best = rec;
+    bestLen = name.length;
+  }
+  return best;
 }
 
 /**
@@ -575,17 +789,22 @@ export async function loadFbxGeometry(
   let resolvedBy: 'submesh' | 'fallback' | 'first' | 'none' = 'none';
   let record: FbxMeshRecord | null = null;
   if (submeshName) {
-    record = entry.geometryByName.get(submeshName) ?? null;
+    record = lookupName(entry, submeshName);
     if (record) resolvedBy = 'submesh';
   }
   if (!record && fallbackName && fallbackName !== submeshName) {
-    record = entry.geometryByName.get(fallbackName) ?? null;
+    record = lookupName(entry, fallbackName);
     if (record) resolvedBy = 'fallback';
+    if (!record) {
+      record = findGeometryByFuzzyName(entry, fallbackName);
+      if (record) resolvedBy = 'fallback';
+    }
   }
   if (!record) {
     record = entry.first;
     if (record) resolvedBy = 'first';
   }
+  logFbxResolve(guid, submeshName, fallbackName, resolvedBy, record, entry);
   return {
     geometry: record?.geometry ?? null,
     materialNames: record?.materialNames ?? [],
@@ -595,4 +814,52 @@ export async function loadFbxGeometry(
     resolvedBy,
     status: 'ready',
   };
+}
+
+// Guarded diagnostic logger. We only want to see *failures* and distinct
+// requests — the scene has hundreds of renderers and logging every one
+// floods the console. Dedupe on (guid, submesh, fallback) so identical
+// repeats collapse to one line, and always print a one-time dump of the
+// available mesh names the first time we touch a given FBX so the user
+// can compare what's being asked for against what the FBX actually
+// contains.
+const _seenResolveKeys = new Set<string>();
+const _dumpedGuids = new Set<string>();
+function logFbxResolve(
+  guid: string,
+  submesh: string | undefined,
+  fallback: string | undefined,
+  resolvedBy: 'submesh' | 'fallback' | 'first' | 'none',
+  record: FbxMeshRecord | null,
+  entry: FbxEntry,
+): void {
+  const key = `${guid}|${submesh ?? ''}|${fallback ?? ''}`;
+  if (_seenResolveKeys.has(key)) return;
+  _seenResolveKeys.add(key);
+
+  if (!_dumpedGuids.has(guid)) {
+    _dumpedGuids.add(guid);
+    const names = Array.from(entry.geometryByName.keys()).sort();
+    const normNames = Array.from(entry.geometryByNormalizedName.keys()).sort();
+    console.log(
+      `[fbx-cache] guid=${guid.slice(0, 8)} meshNames(${names.length})=`,
+      names,
+      ` normalized(${normNames.length})=`,
+      normNames,
+    );
+    // Expose to the window so the developer can grep the live map from the
+    // DevTools console: `window.__fbxEntries['<guid prefix>']`.
+    type W = Window & { __fbxEntries?: Record<string, FbxEntry> };
+    const w = window as W;
+    w.__fbxEntries = w.__fbxEntries ?? {};
+    w.__fbxEntries[guid] = entry;
+    w.__fbxEntries[guid.slice(0, 8)] = entry;
+  }
+
+  // Only noise for fallback/first resolutions — 'submesh' hits are the
+  // happy path and don't need to be logged.
+  if (resolvedBy === 'submesh') return;
+  console.log(
+    `[fbx-resolve] guid=${guid.slice(0, 8)} submesh=${submesh ?? '-'} fallback=${fallback ?? '-'} -> ${resolvedBy} (matched='${record?.meshName ?? ''}')`,
+  );
 }

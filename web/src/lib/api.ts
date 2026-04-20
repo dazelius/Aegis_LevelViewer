@@ -150,6 +150,15 @@ export interface GameObjectNode {
     /** Key into `SceneJson.inlineMeshes` when the MeshFilter references a
      *  scene-embedded `!u!43 Mesh` document (e.g. ProBuilder geometry). */
     inlineMeshFileID?: string;
+    /** When true, the renderer is the synthesized root of a model-prefab
+     *  PrefabInstance (an FBX dragged directly into a Unity scene). The
+     *  server can't walk the FBX's internal hierarchy itself, so it asks
+     *  the client to re-inflate one mesh per FBX node — otherwise levels
+     *  authored as a single `.fbx` (e.g. `F_Sample.fbx` in Mirama Factory)
+     *  collapse to just the first sub-mesh and everything else disappears.
+     *  Cleared server-side when an instance-level `m_Mesh` modification
+     *  overrides the binding to a specific sub-mesh. */
+    renderAllFbxMeshes?: boolean;
   };
   light?: {
     type: 'Directional' | 'Point' | 'Spot' | 'Area' | 'Unknown';

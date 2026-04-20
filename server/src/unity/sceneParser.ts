@@ -256,6 +256,21 @@ export interface GameObjectNode {
      *  MeshFilter's `m_Mesh` reference has a fileID but no guid. The actual
      *  vertex/index data lives in `SceneJson.inlineMeshes[<fileID>]`. */
     inlineMeshFileID?: string;
+    /** When true, the client should treat `meshGuid` as "render EVERY mesh
+     *  inside the FBX", not just the sub-mesh named by `meshSubmeshName`
+     *  (or the first one it encounters).
+     *
+     *  Set for synthesized model-prefab roots: Unity scenes frequently drop
+     *  an FBX directly into the hierarchy as a `PrefabInstance`, which at
+     *  edit time expands to one GameObject per node in the FBX. Our server
+     *  has no FBX parser, so it can only emit a single synthetic root for
+     *  that PrefabInstance; this flag asks the client to re-inflate the
+     *  hierarchy client-side from the FBX bytes it already has.
+     *
+     *  Leave undefined/false for ordinary MeshRenderers whose `m_Mesh`
+     *  explicitly picks one sub-mesh — the existing single-mesh path
+     *  continues to service those, unchanged. */
+    renderAllFbxMeshes?: boolean;
   };
   light?: {
     type: 'Directional' | 'Point' | 'Spot' | 'Area' | 'Unknown';
@@ -397,6 +412,19 @@ export async function buildGameObjectTree(
   // the old root-fallback heuristic).
   const strippedXformByInstanceId = new Map<string, string>();
   const strippedGoByInstanceId = new Map<string, string>();
+  // Track the `m_CorrespondingSourceObject` fileID stored ON the stripped
+  // alias — that's the fileID the source prefab's root Transform / GameObject
+  // carries internally, and therefore the fileID outer scene modifications
+  // use when they target the instance's root (e.g.
+  // `m_LocalRotation.w -> -8679921383154817045`). Without projecting this
+  // fileID onto our synthesised clone, those mods miss the lookup and get
+  // routed through the `isRootApplicableProperty` fallback — which also
+  // catches UNRELATED sub-object mods (any `m_LocalRotation` on an internal
+  // FBX node), silently smearing them across the synth root. See
+  // Factory_New_B.unity where sub-object rotation mods kept forcing
+  // `F_Sample` into a 180° flip.
+  const strippedXformCorrespondingTo = new Map<string, string>();
+  const strippedGoCorrespondingTo = new Map<string, string>();
   for (const d of docs) {
     if (!d.header.stripped) {
       if (d.header.classId === CLASS_TRANSFORM || d.header.classId === CLASS_RECT_TRANSFORM) {
@@ -406,11 +434,36 @@ export async function buildGameObjectTree(
     }
     const instId = fileIdOf(d.body['m_PrefabInstance']);
     if (!instId) continue;
+    const corr = fileIdOf(d.body['m_CorrespondingSourceObject']);
     if (d.header.classId === CLASS_TRANSFORM || d.header.classId === CLASS_RECT_TRANSFORM) {
       strippedXformByInstanceId.set(instId, d.header.fileID);
+      if (corr) strippedXformCorrespondingTo.set(instId, corr);
     } else if (d.header.classId === CLASS_GAME_OBJECT) {
       strippedGoByInstanceId.set(instId, d.header.fileID);
+      if (corr) strippedGoCorrespondingTo.set(instId, corr);
     }
+  }
+
+  // Count native (non-stripped) MeshFilter documents whose `m_Mesh` points
+  // into each FBX asset's guid. This is the "smoking gun" for an unpacked
+  // FBX PrefabInstance: Factory_New_B has ~140 native GameObjects each with
+  // its own MeshFilter referencing a sub-mesh of F_Sample.fbx. We use this
+  // signal (rather than unresolved-modification-count alone) to decide
+  // whether a model-prefab's synthetic multi-mesh renderer should be
+  // suppressed so only the native GOs render. Without this signal we were
+  // incorrectly disabling perfectly normal single-mesh prefabs (DM_Floor_*,
+  // DM_BLDG_*) just because they had many material-slot overrides, and the
+  // scene silently lost that geometry.
+  const nativeMeshFilterGuidCounts = new Map<string, number>();
+  for (const d of docs) {
+    if (d.header.stripped) continue;
+    if (d.header.classId !== CLASS_MESH_FILTER) continue;
+    const meshGuid = guidOf(d.body['m_Mesh']);
+    if (!meshGuid) continue;
+    nativeMeshFilterGuidCounts.set(
+      meshGuid,
+      (nativeMeshFilterGuidCounts.get(meshGuid) ?? 0) + 1,
+    );
   }
 
   const byGOFileID = new Map<string, GameObjectNode>();
@@ -554,8 +607,26 @@ export async function buildGameObjectTree(
       sourcePrefab = await parsePrefabByGuid(sourceGuid, opts.prefabStack);
       if (sourcePrefab) {
         prefabNode = clonePrefabTree(sourcePrefab.root);
-        // Apply modifications
-        applyPrefabModifications(prefabNode, sourcePrefab, mod);
+        // Apply modifications. We pass the stripped-alias's
+        // `m_CorrespondingSourceObject` fileIDs so the modification pipeline
+        // can tell which unresolved-target mods are ACTUALLY meant for this
+        // instance's root vs. some interior sub-object — critical for model
+        // prefabs where every sub-mesh generates its own hashed fileID but
+        // only the root has a stripped alias that names it in scene terms.
+        const rootXformCorr = strippedXformCorrespondingTo.get(d.header.fileID);
+        const rootGoCorr = strippedGoCorrespondingTo.get(d.header.fileID);
+        // Use native-MeshFilter evidence to decide whether this prefab is
+        // "unpacked" in the scene. Counting modification-shape alone turned
+        // out to be too trigger-happy — lots of normal single-mesh prefabs
+        // carry 40+ material-slot overrides and would otherwise be treated
+        // as unpacked and vanish entirely (DM_Floor_*, DM_BLDG_* regression
+        // from the previous pass).
+        const nativeMeshFilterHits = nativeMeshFilterGuidCounts.get(sourceGuid) ?? 0;
+        applyPrefabModifications(prefabNode, sourcePrefab, mod, {
+          rootTransformFileID: rootXformCorr,
+          rootGameObjectFileID: rootGoCorr,
+          nativeMeshFilterCount: nativeMeshFilterHits,
+        });
       }
     } catch {
       // Swallow: a broken prefab shouldn't kill the whole scene.
@@ -636,6 +707,45 @@ export async function buildGameObjectTree(
     if (aliasXformId) byTransformFileID.set(aliasXformId, prefabNode);
     const aliasGoId = strippedGoByInstanceId.get(d.header.fileID);
     if (aliasGoId) byGOFileID.set(aliasGoId, prefabNode);
+    // Also project the source-object fileIDs: scene mods that target the
+    // instance root by its ORIGINAL (prefab-native) fileID resolve here
+    // instead of falling back through `isRootApplicableProperty`. For
+    // synthesised model prefabs this is essential — otherwise every
+    // unresolved sub-object transform mod smears onto the synth root.
+    // `set` only if not already mapped; the outer prefab's own mappings
+    // always win (they're the authoritative identity for this instance).
+    const corrXformId = strippedXformCorrespondingTo.get(d.header.fileID);
+    if (corrXformId && !byTransformFileID.has(corrXformId)) {
+      byTransformFileID.set(corrXformId, prefabNode);
+    }
+    const corrGoId = strippedGoCorrespondingTo.get(d.header.fileID);
+    if (corrGoId && !byGOFileID.has(corrGoId)) {
+      byGOFileID.set(corrGoId, prefabNode);
+    }
+  }
+
+  // --- Orphaned native transform rescue pass ----------------------------
+  // Scenes like Factory_New_B author FBX prefabs in an "unpacked" shape:
+  // the PrefabInstance stays for bookkeeping, but the actual per-sub-mesh
+  // GameObjects live as native (non-stripped) scene objects whose
+  // `m_Father` points at the PrefabInstance's stripped Transform alias.
+  // During the initial root-collection pass (above) those natives were
+  // skipped because `m_Father` is truthy, and they were never reached via
+  // m_Children recursion from any real root either (stripped transform
+  // docs don't carry m_Children). Now that the PrefabInstance expansion
+  // has registered every stripped alias into `byTransformFileID` as a
+  // real `GameObjectNode`, we can finally resolve those parents and
+  // attach the orphans where Unity intended — otherwise Factory_New_B
+  // renders nothing because all ~140 wall/floor/pillar GOs are floating
+  // in an unreachable limbo.
+  for (const t of transforms) {
+    if (byTransformFileID.has(t.header.fileID)) continue;
+    const father = fileIdOf(t.body['m_Father']);
+    if (!father) continue;
+    const parent = byTransformFileID.get(father);
+    if (!parent) continue;
+    const node = await buildFromTransform(t);
+    if (node) parent.children.push(node);
   }
 
   return { roots, byTransformFileID, byGOFileID, byComponentFileID };
@@ -1056,6 +1166,7 @@ function clonePrefabTree(node: GameObjectNode): GameObjectNode {
           meshSubmeshName: node.renderer.meshSubmeshName,
           builtinMesh: node.renderer.builtinMesh,
           inlineMeshFileID: node.renderer.inlineMeshFileID,
+          renderAllFbxMeshes: node.renderer.renderAllFbxMeshes,
         }
       : undefined,
     light: node.light ? { ...node.light, color: [...node.light.color] as [number, number, number, number] } : undefined,
@@ -1119,6 +1230,30 @@ function applyPrefabModifications(
     isModelPrefab: boolean;
   },
   modBlock: UnityObj,
+  /** PrefabInstance-specific "root alias" fileIDs, derived from stripped
+   *  Transform / GameObject docs in the outer scene. Unity's root-level
+   *  scene modifications (`m_LocalPosition.x`, `m_LocalRotation.w`,
+   *  `m_Materials.Array.data[0]`, …) target these fileIDs. For model
+   *  prefabs where our synthetic tree doesn't model FBX sub-objects at
+   *  all, knowing which targetFileID "means the root" is the only way to
+   *  tell a legitimate root override apart from a stray sub-object
+   *  modification — the latter has to be dropped, otherwise the
+   *  last-write-wins fallback smears sub-object rotations all over the
+   *  synth root (see Factory_New_B, where that's how `F_Sample`
+   *  accumulated a spurious 180° flip). */
+  instanceRootAliases?: {
+    rootTransformFileID?: string;
+    rootGameObjectFileID?: string;
+    /** How many native (non-stripped) MeshFilter documents in the outer
+     *  scene have `m_Mesh` pointing at this source prefab's FBX guid. A
+     *  non-trivial count means the prefab has been "unpacked" into its
+     *  individual FBX sub-meshes as native scene GameObjects, and our
+     *  synthetic multi-mesh root would just duplicate their rendering.
+     *  Zero (or very low) counts mean the prefab is still a first-class
+     *  instance and we MUST keep rendering the synth — otherwise normal
+     *  single-mesh model prefabs disappear. */
+    nativeMeshFilterCount?: number;
+  },
 ): void {
   const mods = Array.isArray(modBlock['m_Modifications']) ? (modBlock['m_Modifications'] as unknown[]) : [];
   if (mods.length === 0) return;
@@ -1161,6 +1296,14 @@ function applyPrefabModifications(
   let hitComp = 0;
   let hitFallback = 0;
   let missed = 0;
+  // Count modifications that target a sub-component fileID (a specific
+  // MeshFilter / MeshRenderer inside the FBX) rather than the PrefabInstance
+  // root. Unity scenes authored by dropping an FBX prefab and then editing
+  // (or unpacking) individual sub-objects produce dozens-to-hundreds of
+  // these. Our synthesized model-prefab tree has ONLY a single root, so
+  // none of those sub-component fileIDs resolve in the clone map. See the
+  // post-loop comment for how we use this to detect unpacked instances.
+  let unresolvedSubRendererMods = 0;
 
   for (const rawMod of mods) {
     if (!rawMod || typeof rawMod !== 'object') continue;
@@ -1205,6 +1348,36 @@ function applyPrefabModifications(
       else hitComp += 1;
     }
     if (!node && prefabInfo.isModelPrefab && isRootApplicableProperty(propertyPath)) {
+      // For TRANSFORM paths (`m_LocalPosition`, `m_LocalRotation`, …)
+      // only fall back to the root when the targetFileID matches one of
+      // the stripped-alias "root corresponds-to" fileIDs for this
+      // PrefabInstance. Those fileIDs are the scene-author's way of
+      // naming the instance ROOT; anything else is a sub-object whose
+      // transform mod we can't represent in our single-root synth. Without
+      // this gate, stray sub-object rotations overwrite the root's own
+      // identity transform (F_Sample was landing at (0,-0.707,-0.707,0)
+      // because of 200+ sub-object mods all smearing their last values onto
+      // the root). For NON-transform paths we keep the old permissive
+      // fallback — single-mesh model prefabs still need
+      // `m_Materials.Array.data[0]` etc. to collapse onto the root.
+      const isTransformPath = isTransformProperty(propertyPath);
+      const matchesRootAlias =
+        targetFileID === instanceRootAliases?.rootTransformFileID ||
+        targetFileID === instanceRootAliases?.rootGameObjectFileID;
+      if (isTransformPath && !matchesRootAlias) {
+        missed += 1;
+        continue;
+      }
+      // Tally sub-renderer-targeted mods BEFORE we collapse them onto the
+      // root. Property paths that only make sense on a MeshFilter/MeshRenderer
+      // (mesh swap, material slot, enabled/shadow flags) are the signature
+      // of an "unpacked" FBX layout: the scene has native GameObjects for
+      // each sub-object and just keeps the PrefabInstance around as a
+      // residual wrapper. We can't faithfully apply these mods on our
+      // single-root synth, but at least we can notice the pattern.
+      if (isSubRendererProperty(propertyPath) && !matchesRootAlias) {
+        unresolvedSubRendererMods += 1;
+      }
       node = clonedRoot;
       hitFallback += 1;
     }
@@ -1216,12 +1389,68 @@ function applyPrefabModifications(
     applyModification(node, propertyPath, value, objectReference);
   }
 
+  // NOTE: auto "unpacked FBX" detection is DISABLED.
+  //
+  // Two scene shapes produce nearly identical YAML signals — a PrefabInstance
+  // that keeps the FBX's stripped-alias root, plus native scene GameObjects
+  // carrying MeshFilter references back to the FBX's guid:
+  //   (A) TRUE UNPACK: scene replaces prefab-internal sub-objects with native
+  //       GOs at the SAME positions. Rendering both synth expansion + native
+  //       GOs double-draws and z-fights.
+  //   (B) EXTENSION (Factory_New_B): scene KEEPS the prefab body and ADDS
+  //       more instances at DIFFERENT positions. We must render both.
+  //
+  // Every "mods + native MeshFilters" counting heuristic we've tried mistakes
+  // (B) for (A): a 123-submesh FBX like F_Sample naturally has ~40+ real
+  // sub-renderer mods (cast/receive shadow flags, material swaps on specific
+  // sub-parts) that fall back to the root because we can't resolve the
+  // sub-object fileIDs. Combined with any meaningful extension child count,
+  // the heuristic false-fires and hides the entire prefab body — which is
+  // exactly what the user reported for Factory_New_B (144 rendered meshes
+  // instead of the ~264 Unity shows).
+  //
+  // True (A) unpacks require a geometric signal to distinguish from (B)
+  // reliably (do native-GO positions coincide with synth sub-mesh positions?).
+  // Until we have that signal, render both — the worst case for an unseen
+  // (A) scene is z-fighting, which is visually noisy but recoverable;
+  // hiding real geometry is not.
+  //
+  // Keep the counters + logs so we can see unresolved-mod pressure per
+  // prefab when diagnosing the next weird scene.
+  const nativeHits = instanceRootAliases?.nativeMeshFilterCount ?? 0;
+  if (prefabInfo.isModelPrefab && clonedRoot.renderer?.renderAllFbxMeshes) {
+    console.log(
+      `[modelPrefabKeep] root='${clonedRoot.name}' ` +
+        `nativeMeshFilters=${nativeHits} unresolvedSubRendererMods=${unresolvedSubRendererMods} ` +
+        `— keeping synth expansion AND native children (auto-unpack disabled)`,
+    );
+  }
+
   // Log only when most mods miss — that points at a prefab where the stripped
   // alias pass didn't catch enough nested references. Healthy expansions go
   // silent.
   if (missed >= 5 && missed > hitGo + hitXform + hitComp + hitFallback) {
     console.log(
       `[prefabMod] root='${clonedRoot.name}' mods=${mods.length} hitGo=${hitGo} hitXform=${hitXform} hitComp=${hitComp} fallback=${hitFallback} miss=${missed}`,
+    );
+  }
+
+  // Targeted diagnostic for F_Sample-like model prefabs: dump the root's
+  // final transform after all mods are applied. Lets us compare what Unity
+  // records in the scene (identity rotation, zero position for F_Sample) vs
+  // what we resolve server-side. Silent for non-model-prefab expansions so
+  // regular scene logs stay clean.
+  if (prefabInfo.isModelPrefab) {
+    const tp = clonedRoot.transform.position;
+    const tq = clonedRoot.transform.quaternion;
+    const ts = clonedRoot.transform.scale;
+    console.log(
+      `[modelPrefabMod] root='${clonedRoot.name}' mods=${mods.length} ` +
+        `fallback=${hitFallback} miss=${missed} ` +
+        `pos=(${tp[0].toFixed(3)},${tp[1].toFixed(3)},${tp[2].toFixed(3)}) ` +
+        `quat=(${tq[0].toFixed(3)},${tq[1].toFixed(3)},${tq[2].toFixed(3)},${tq[3].toFixed(3)}) ` +
+        `scale=(${ts[0].toFixed(3)},${ts[1].toFixed(3)},${ts[2].toFixed(3)}) ` +
+        `active=${clonedRoot.active} hasRotOverride=${clonedRoot.transform.hasRotationOverride}`,
     );
   }
 }
@@ -1232,17 +1461,91 @@ function applyPrefabModifications(
  * or its Transform / MeshRenderer — the most common modification surface for
  * scene-placed prefabs.
  */
+/**
+ * Properties that are MeshFilter/MeshRenderer-owned, i.e. only meaningful
+ * when a scene override targets a specific sub-component fileID inside an
+ * FBX hierarchy. Used as a detection signal for "unpacked" FBX prefab
+ * instances — scenes where Unity has broken the prefab's sub-objects out
+ * into native scene GameObjects, so the PrefabInstance carries dozens of
+ * these overrides that our single-root synth can't faithfully absorb.
+ *
+ * We INTENTIONALLY include these in `isRootApplicableProperty` too (so
+ * the few cases of "a single-mesh prefab with a scene material swap"
+ * still collapse onto the synth root correctly). The counter here just
+ * flags when that collapse is happening at a scale that makes the synth
+ * itself the wrong rendering strategy.
+ */
+function isSubRendererProperty(propertyPath: string): boolean {
+  if (propertyPath === 'm_Mesh') return true;
+  if (propertyPath.startsWith('m_Materials.Array.')) return true;
+  if (propertyPath === 'm_Enabled') return true;
+  if (propertyPath === 'm_CastShadows') return true;
+  if (propertyPath === 'm_ReceiveShadows') return true;
+  // NOTE: `m_StaticEditorFlags` used to live here but it's a GameObject
+  // property (static-batching hint), not a renderer property. Scenes like
+  // Factory_New_B.unity tag dozens of sub-GOs as static without touching
+  // their mesh/material bindings at all, which used to false-positive the
+  // "unpacked" detection below and wipe out the whole F_Sample prefab.
+  if (propertyPath === 'm_StaticShadowCaster') return true;
+  return false;
+}
+
 function isRootApplicableProperty(propertyPath: string): boolean {
-  if (propertyPath.startsWith('m_LocalPosition')) return true;
-  if (propertyPath.startsWith('m_LocalRotation')) return true;
-  if (propertyPath.startsWith('m_LocalScale')) return true;
-  if (propertyPath.startsWith('m_LocalEulerAnglesHint')) return true;
+  // Transform-bearing paths ARE listed here, but the fallback in
+  // applyPrefabModifications additionally gates them on "targetFileID
+  // matches the PrefabInstance's stripped-alias root fileID". Without
+  // that gate, unresolved sub-object transform mods would smear their
+  // last value onto the synth root (see F_Sample's phantom 180° flip).
+  // Without listing them here, though, legitimate root-transform mods —
+  // the common DesertMine case where every DM_* prefab's scene position
+  // is authored via `m_LocalPosition.{x,y,z}` targeting the stripped-
+  // Transform alias — would resolve to no node and get dropped, leaving
+  // every single model prefab piled up at the origin. See applyModification
+  // and the sub-renderer-property handling below for the gating detail.
+  if (propertyPath === 'm_LocalPosition.x') return true;
+  if (propertyPath === 'm_LocalPosition.y') return true;
+  if (propertyPath === 'm_LocalPosition.z') return true;
+  if (propertyPath === 'm_LocalRotation.x') return true;
+  if (propertyPath === 'm_LocalRotation.y') return true;
+  if (propertyPath === 'm_LocalRotation.z') return true;
+  if (propertyPath === 'm_LocalRotation.w') return true;
+  if (propertyPath === 'm_LocalScale.x') return true;
+  if (propertyPath === 'm_LocalScale.y') return true;
+  if (propertyPath === 'm_LocalScale.z') return true;
+  if (propertyPath === 'm_LocalEulerAnglesHint.x') return true;
+  if (propertyPath === 'm_LocalEulerAnglesHint.y') return true;
+  if (propertyPath === 'm_LocalEulerAnglesHint.z') return true;
   if (propertyPath === 'm_Name') return true;
-  if (propertyPath === 'm_IsActive') return true;
+  // NOTE: `m_IsActive` is deliberately NOT root-applicable. Inside a model
+  // prefab's PrefabInstance (synthesized FBX), `m_IsActive` mods almost
+  // exclusively target internal sub-GameObjects by their hashed fileID
+  // (e.g. F_Sample.fbx has per-room / per-prop toggles authored in the
+  // source). Our synth tree only models the FBX root (fileID
+  // 100100000), so every one of those sub-object toggles misses the map
+  // and — if we let them fall back — the last `m_IsActive: 0` silently
+  // deactivates the ENTIRE F_Sample, leaving Factory_New_B with no
+  // visible level geometry. If the scene genuinely wants the root off,
+  // it would target the root's actual GO fileID which we can't match
+  // either, so the least-bad behaviour is to leave root active and
+  // ignore unresolved sub-object toggles.
   if (propertyPath === 'm_Mesh') return true;
   if (propertyPath.startsWith('m_Materials.Array.data[')) return true;
   if (propertyPath === 'm_Materials.Array.size') return true;
   return false;
+}
+
+/**
+ * True for any `m_LocalPosition.*`, `m_LocalRotation.*`, `m_LocalScale.*`,
+ * or `m_LocalEulerAnglesHint.*` property path. These are the ones the
+ * root-fallback needs to gate on a stripped-alias match.
+ */
+function isTransformProperty(propertyPath: string): boolean {
+  return (
+    propertyPath.startsWith('m_LocalPosition.') ||
+    propertyPath.startsWith('m_LocalRotation.') ||
+    propertyPath.startsWith('m_LocalScale.') ||
+    propertyPath.startsWith('m_LocalEulerAnglesHint.')
+  );
 }
 
 function applyModification(
@@ -1357,6 +1660,12 @@ function applyModification(
       // the overridden mesh — drop it so the post-pass (or the client's
       // name-based fallback) picks the right geometry.
       node.renderer.meshSubmeshName = undefined;
+      // An `m_Mesh` override is authoritative: the instance is picking a
+      // specific mesh, not "the whole FBX". If the source was a synthesized
+      // model prefab (which sets `renderAllFbxMeshes: true`) we have to
+      // clear that flag, otherwise the client would still expand every
+      // sub-mesh of the original FBX and ignore the override entirely.
+      node.renderer.renderAllFbxMeshes = false;
       break;
     }
     default: {
@@ -1462,11 +1771,19 @@ async function resolveOverriddenMeshNames(roots: GameObjectNode[]): Promise<void
  *      a group inherits the flag — useful for scenes that nest an entire
  *      sub-hierarchy of collider proxies without annotating each leaf.
  *
- * The function is intentionally conservative: we only match names that
- * SURROUND the `col`/`collider` token with a separator (`_`, end-of-name, or
- * a digit), so genuine props like `Column_04` or `Colonnade` are NOT treated
- * as colliders. A false negative just leaves a collider visible; a false
- * positive would silently hide a real prop, which is much more confusing.
+ * Anti-false-positive override: if a node has a MeshRenderer with
+ * `m_Enabled: 1`, Unity is actively drawing it — we never hide such a node
+ * even when its name/ancestor path says otherwise. This rescues projects
+ * whose artists abbreviate "column" as `col_NNN` (e.g. `Factory_New_B` with
+ * 479 `col_080`-style columns, all of which would otherwise vanish from
+ * the viewer by default). The ancestor-matched flag still propagates down
+ * so that genuine disabled-renderer / no-renderer collider proxies nested
+ * under a visible `col_*` / `Collider` branch continue to be suppressed.
+ *
+ * The regex is also conservative about substrings: we only match names
+ * where the `col`/`collider` token is surrounded by a separator (`_`,
+ * end-of-name, or a digit), so genuine props like `Column_04` or
+ * `Colonnade` are never treated as colliders.
  */
 function markColliderTrees(roots: GameObjectNode[]): void {
   // Matches names that identify the GO itself as a collider instance.
@@ -1479,9 +1796,22 @@ function markColliderTrees(roots: GameObjectNode[]): void {
   const visit = (node: GameObjectNode, ancestorFlagged: boolean): void => {
     const selfMatch =
       COLLIDER_NAME.test(node.name) || GROUP_NAME.test(node.name);
-    const flagged = ancestorFlagged || selfMatch;
-    if (flagged) node.isCollider = true;
-    for (const c of node.children) visit(c, flagged);
+    const nameSaysCollider = ancestorFlagged || selfMatch;
+
+    // A node Unity is drawing (renderer enabled) is definitionally a
+    // visual, so the `_col` name heuristic doesn't apply. Nodes with no
+    // renderer (groups) or with a disabled renderer still take the flag,
+    // which is the correct behavior for physics-only proxy geometry and
+    // for wrapper groups like `ENV_DesertMine/collider`.
+    const isVisuallyActive = node.renderer?.enabled === true;
+    if (nameSaysCollider && !isVisuallyActive) node.isCollider = true;
+
+    // Ancestor flag still propagates to descendants regardless of this
+    // node's own visibility: a `Collider` group might contain one visible
+    // debug mesh among hundreds of hidden proxies, and we don't want the
+    // visible debug mesh to rescue every sibling from the `isCollider`
+    // tagging.
+    for (const c of node.children) visit(c, nameSaysCollider);
   };
   for (const r of roots) visit(r, false);
 }

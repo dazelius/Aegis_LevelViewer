@@ -241,11 +241,24 @@ async function synthesizeModelPrefab(
     renderer: {
       enabled: true,
       color: [1, 1, 1, 1],
-      materialGuids: externalMaterialGuids,
+      // For model-prefab roots we deliberately leave `materialGuids` empty.
+      // The client is going to expand the FBX into one mesh per sub-node
+      // (see `renderAllFbxMeshes` below) and resolve materials per sub-mesh
+      // from `fbxExternalMaterials[guid][<FBX-embedded name>]`. Shoving the
+      // external-material list here as a flat array would desync with that
+      // path — Unity's external-objects table is name-keyed, not ordinal.
+      materialGuids: [],
       meshGuid: guid,
       meshName: path.basename(absPath),
       meshFileID: '4300000',
       meshSubmeshName: submeshName,
+      // Tell the client this renderer stands in for a "whole FBX dragged
+      // into the scene" — it should iterate every mesh inside the FBX and
+      // place each one at its FBX-local transform, not pick one sub-mesh.
+      // Scene-level `m_Mesh` modifications flip this back to false in
+      // `applyModification` so thin-wrapper prefabs that redirect to a
+      // single sub-mesh keep the single-mesh behaviour they expect.
+      renderAllFbxMeshes: true,
     },
     children: [],
   };

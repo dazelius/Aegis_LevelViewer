@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { Grid, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import {
@@ -58,6 +58,25 @@ export default function LevelViewer() {
     return <UnityExportCanvas scene={scene} relPath={relPath} />;
   }
   return <ViewerCanvas scene={scene} relPath={relPath} />;
+}
+
+/**
+ * Dev-only hook: exposes the live R3F `scene` (and `THREE`) on `window` so
+ * we can inspect transforms / bounds / meshes from the browser console when
+ * diagnosing why a level looks wrong. Ship as-is — it costs one effect per
+ * mount and nothing at all if the console hook is never read.
+ */
+function DebugSceneHook() {
+  const scene = useThree((s) => s.scene);
+  useEffect(() => {
+    (window as unknown as { __r3fScene?: unknown; __THREE?: unknown }).__r3fScene = scene;
+    (window as unknown as { __r3fScene?: unknown; __THREE?: unknown }).__THREE = THREE;
+    return () => {
+      const w = window as unknown as { __r3fScene?: unknown };
+      if (w.__r3fScene === scene) delete w.__r3fScene;
+    };
+  }, [scene]);
+  return null;
 }
 
 function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string }) {
@@ -208,6 +227,7 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
           if ((e as MouseEvent).button === 0) setSelection(null);
         }}
       >
+        <DebugSceneHook />
         <Suspense fallback={null}>
           {/* SceneRoots instantiates the scene lights + ambient + fog
               internally so we don't duplicate them here. */}
