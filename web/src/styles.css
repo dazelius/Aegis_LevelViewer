@@ -48,6 +48,14 @@ a:hover { text-decoration: underline; }
 }
 .app-header button:hover { background: #242c3c; }
 
+/* Play mode: collapse the top app bar entirely. Toggled by
+   LevelViewer via `document.body.classList`. The viewer hides its own
+   HUD / inspector at the JSX level, and this rule completes the
+   illusion of a clean full-screen game view. Keeping the header in
+   flow but zeroing its height lets the Canvas naturally grow to fill
+   the viewport without needing extra layout math. */
+body.play-mode .app-header { display: none; }
+
 .app-main {
   flex: 1;
   min-height: 0;
@@ -148,6 +156,99 @@ a:hover { text-decoration: underline; }
   background: #2a3d5a;
   border-color: #4a6a96;
   color: #e6eefb;
+}
+/* --- Play mode (service-style, NOT a debug toggle) ------------------
+ * Separate from `.hud-toggle` so it stays the visual headline of the
+ * viewer page. FAB lives in the bottom-right corner, status strip lives
+ * top-center during an active session. */
+.play-fab {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px 12px 20px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f4fff6;
+  background: linear-gradient(140deg, #2bcf6a 0%, #1aa358 100%);
+  border: 1px solid #19934f;
+  border-radius: 999px;
+  box-shadow: 0 10px 26px -10px rgba(26, 163, 88, 0.65), 0 2px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+.play-fab:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 14px 30px -10px rgba(26, 163, 88, 0.75), 0 3px 6px rgba(0, 0, 0, 0.4);
+}
+.play-fab:active { transform: translateY(0); filter: brightness(0.95); }
+.play-fab-icon { font-size: 11px; line-height: 1; }
+.play-fab-label { letter-spacing: 0.4px; }
+
+.play-status {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px 7px 14px;
+  font: inherit;
+  font-size: 12px;
+  color: #e8f2ff;
+  background: rgba(14, 18, 26, 0.78);
+  border: 1px solid #2a3442;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+.play-status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #2bcf6a;
+  box-shadow: 0 0 0 3px rgba(43, 207, 106, 0.22);
+  animation: play-status-pulse 1.6s ease-in-out infinite;
+}
+@keyframes play-status-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(43, 207, 106, 0.22); }
+  50%      { box-shadow: 0 0 0 6px rgba(43, 207, 106, 0.08); }
+}
+.play-status-label { font-weight: 600; letter-spacing: 0.3px; }
+.play-status-hint { color: #9bb0c8; }
+.play-status-exit {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #3c4556;
+  background: #1f2532;
+  color: #e6eefb;
+  cursor: pointer;
+}
+.play-status-exit:hover { background: #2a3442; border-color: #4a5566; }
+
+/* Minimalist Esc-only variant used once the full HUD + inspector are
+   hidden in Play mode. The pulsing dot, bold label and cheat-sheet
+   would compete with the game view, so the pill collapses to a single
+   subdued hint anchored to the top center. */
+.play-status-minimal {
+  padding: 5px 14px;
+  gap: 0;
+  background: rgba(14, 18, 26, 0.55);
+  border-color: rgba(60, 69, 86, 0.6);
+}
+.play-status-minimal .play-status-hint {
+  color: #c7d3e5;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 .status-banner {
@@ -319,3 +420,240 @@ a:hover { text-decoration: underline; }
   border-radius: 3px;
   color: #c7d0df;
 }
+
+/* ===========================================================================
+   Feedback composer + side panel (SNS-style feedback on spatial anchors)
+   ===========================================================================
+   The composer is an HTML modal that opens when the player presses Enter
+   in Play mode while looking at real geometry. It shows a thumbnail of the
+   exact frame at capture time, accepts a short text body, and on submit
+   creates a persistent Feedback record pinned at the aim world position.
+   The side panel is the out-of-game feed list that shows every authored
+   feedback for the current scene.
+*/
+
+.feedback-composer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 14, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.feedback-composer {
+  width: min(640px, 92vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: #12161f;
+  border: 1px solid #2a3344;
+  border-radius: 10px;
+  box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.65), 0 4px 12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.feedback-composer-head {
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid #1e2433;
+}
+.feedback-composer-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #e8ecf1;
+}
+.feedback-composer-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #7e8aa0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.feedback-composer-dot { color: #4a556a; }
+.feedback-composer-body {
+  display: flex;
+  gap: 12px;
+  padding: 14px 18px;
+  min-height: 0;
+}
+.feedback-composer-thumb {
+  flex: 0 0 240px;
+  width: 240px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #2a3344;
+  background: #0b0d11;
+}
+.feedback-composer-text {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #e8ecf1;
+  background: #0e121b;
+  border: 1px solid #2a3344;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 80ms;
+}
+.feedback-composer-text:focus { border-color: #4a6a96; }
+.feedback-composer-foot {
+  padding: 10px 18px 14px;
+  border-top: 1px solid #1e2433;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.feedback-composer-hint {
+  font-size: 11px;
+  color: #6c7689;
+}
+.feedback-composer-actions {
+  display: flex;
+  gap: 8px;
+}
+.feedback-composer-actions .hud-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- Side panel: list of feedbacks for the current scene ------------- */
+
+.feedback-panel {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 300px;
+  max-height: calc(100% - 28px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(14, 18, 26, 0.92);
+  border: 1px solid #232a3a;
+  border-radius: 8px;
+  box-shadow: 0 12px 24px -14px rgba(0, 0, 0, 0.55);
+  z-index: 15;
+  overflow: hidden;
+}
+.feedback-panel.collapsed {
+  width: auto;
+}
+.feedback-panel-head {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1d2332;
+  gap: 10px;
+}
+.feedback-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #e8ecf1;
+  flex: 1;
+}
+.feedback-panel-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  font-size: 10px;
+  background: #1e2736;
+  border: 1px solid #334058;
+  border-radius: 999px;
+  color: #9aa4b8;
+}
+.feedback-panel-toggle {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid #2a3344;
+  border-radius: 4px;
+  color: #9aa4b8;
+  cursor: pointer;
+}
+.feedback-panel-toggle:hover {
+  color: #e8ecf1;
+  border-color: #3c4556;
+}
+.feedback-panel-body {
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.feedback-panel-empty {
+  padding: 12px 10px;
+  font-size: 12px;
+  color: #7e8aa0;
+  line-height: 1.5;
+}
+
+.feedback-card {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  background: #131824;
+  border: 1px solid #222a3b;
+  border-radius: 6px;
+}
+.feedback-card-thumb {
+  flex: 0 0 84px;
+  width: 84px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #232a3a;
+  background: #0b0d11;
+}
+.feedback-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.feedback-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: #7e8aa0;
+}
+.feedback-card-time { cursor: default; }
+.feedback-card-delete {
+  background: transparent;
+  border: none;
+  color: #5c6578;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.feedback-card-delete:hover { color: #ff8585; }
+.feedback-card-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #d3dbe8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 6.4em;
+  overflow: hidden;
+}
+.feedback-card-anchor {
+  font-size: 10px;
+  color: #556075;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+

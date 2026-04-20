@@ -1,8 +1,14 @@
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Grid, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+
+// drei's OrbitControls re-exports the three-stdlib class as its ref
+// shape. Rather than adding three-stdlib as an explicit dep just to
+// name the type, resolve it through React so the compiler uses
+// whatever drei is already vendoring.
+type OrbitControlsRef = React.ComponentRef<typeof OrbitControls>;
 import {
   fetchScene,
   fetchRebakeStatus,
@@ -26,6 +32,17 @@ import {
   computeUnityExportFraming,
   getUnityExportStats,
 } from '../lib/unityExportToR3F';
+import {
+  PlayerController,
+  type PlayerControllerHandle,
+} from '../lib/PlayerController';
+import { ShoulderCamera } from '../lib/ShoulderCamera';
+import { Shooter, type CameraRecoilAPI } from '../lib/Shooter';
+import { defaultPose, findNodeWorldPosition, type PlayerPose } from '../lib/playerPose';
+import { playModeState, resetPlayModeState } from '../lib/playModeState';
+import { FeedbackComposer, type FeedbackCaptureContext } from '../lib/FeedbackComposer';
+import { FeedbackPins } from '../lib/FeedbackPins';
+import { FeedbackPanel } from '../lib/FeedbackPanel';
 
 export default function LevelViewer() {
   const params = useParams();
@@ -76,6 +93,75 @@ function DebugSceneHook() {
       if (w.__r3fScene === scene) delete w.__r3fScene;
     };
   }, [scene]);
+  return null;
+}
+
+/**
+ * Publishes the live R3F camera on the provided ref so callers
+ * outside the Canvas tree (the Enter-key feedback capture in
+ * LevelViewer) can read pose without threading context.
+ */
+function CameraRefBridge({
+  cameraRef,
+}: {
+  cameraRef: React.MutableRefObject<THREE.Camera | null>;
+}) {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    cameraRef.current = camera;
+    return () => {
+      if (cameraRef.current === camera) cameraRef.current = null;
+    };
+  }, [camera, cameraRef]);
+  return null;
+}
+
+/**
+ * Bridges editor-mode (OrbitControls) and Play-mode (QuarterviewCamera)
+ * camera state across toggles so the user doesn't lose their place.
+ *
+ * When Play mode turns ON:
+ *  - snapshot the current camera position + orbit target,
+ *  - from the next frame on, QuarterviewCamera owns camera.position.
+ *
+ * When Play mode turns OFF:
+ *  - restore camera.position to the snapshot,
+ *  - restore orbit.target to the snapshot and call `.update()` so the
+ *    controls resume orbiting around the remembered focus instead of
+ *    snapping to scene center.
+ *
+ * Why not unmount OrbitControls during Play: drei's OrbitControls
+ * re-reads its `target` prop only on mount, so remounting it would
+ * reset the saved target anyway. Keeping it mounted-but-disabled is
+ * cheaper and preserves damping velocity across the toggle.
+ */
+function OrbitStateKeeper({
+  playMode,
+  orbitRef,
+}: {
+  playMode: boolean;
+  orbitRef: React.MutableRefObject<OrbitControlsRef | null>;
+}) {
+  const camera = useThree((s) => s.camera);
+  const saved = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const prev = useRef(playMode);
+  useEffect(() => {
+    if (prev.current === playMode) return;
+    if (playMode) {
+      saved.current = {
+        pos: camera.position.clone(),
+        target: orbitRef.current?.target?.clone() ?? new THREE.Vector3(),
+      };
+    } else if (saved.current) {
+      camera.position.copy(saved.current.pos);
+      const ctrl = orbitRef.current;
+      if (ctrl) {
+        ctrl.target.copy(saved.current.target);
+        ctrl.update();
+      }
+    }
+    prev.current = playMode;
+  }, [playMode, camera, orbitRef]);
   return null;
 }
 
@@ -138,8 +224,312 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
     return () => window.removeEventListener('keydown', onKey);
   }, [selection]);
 
+  // --- Play mode (shoulder-view shooter camera + WASD + mouse-look) ---
+  //
+  // Play mode and the editor's OrbitControls are mutually exclusive:
+  // while Play is ON, ShoulderCamera mutates the camera every frame
+  // and OrbitControls is disabled via `enabled={!playMode}`. We keep
+  // OrbitControls *mounted* either way so its internal target/damping
+  // state survives a Play session — when the user exits we restore
+  // the saved camera transform and `.update()` the controls.
+  //
+  // The user-facing gesture is NOT a HUD toggle — a dedicated
+  // service-style "Play" button at the bottom-right of the viewer
+  // enters Play mode AND requests pointer lock on the canvas in the
+  // same click (browsers require the lock request to be inside a user
+  // gesture). Exiting is driven by pointer lock release (ESC, focus
+  // loss, tab-out): whenever the lock is dropped we fall back to the
+  // editor. That keeps Play mode's "there's a cursor captured" state
+  // truly 1:1 with the React `playMode` flag — no "stuck in Play but
+  // the mouse is free" failure mode.
+  const [playMode, setPlayMode] = useState(false);
+  // Crouch toggle — lives in LevelViewer (same layer as pointer lock
+  // / playMode) so ShoulderCamera can receive it as a prop (preset
+  // swap) and `playModeState.crouching` stays in sync for the non-
+  // React-rendering consumers (PlayerController, CharacterAvatar).
+  const [crouching, setCrouching] = useState(false);
+  // Feedback composer state. When non-null, the modal is open with
+  // the frozen capture context (thumbnail / aim / camera pose).
+  // While the composer is up we intentionally release pointer lock
+  // (so the user can click "등록" / "취소" and type a paragraph)
+  // but keep `playMode` true so the Canvas subtree — player, camera,
+  // shooter — stays mounted. That's the whole reason we gate the
+  // pointer-lock-release → exit-play bridge on `!composerOpenRef`:
+  // the composer legitimately needs to release the lock without
+  // tearing down Play mode.
+  const [composer, setComposer] = useState<FeedbackCaptureContext | null>(null);
+  const composerOpenRef = useRef(false);
+  useEffect(() => {
+    composerOpenRef.current = composer !== null;
+  }, [composer]);
+  const playerHandleRef = useRef<PlayerControllerHandle>(null);
+  const orbitRef = useRef<OrbitControlsRef | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // THREE.Camera captured from the R3F Canvas via an effect-child
+  // hook, so the Enter-key handler (which lives outside the Canvas
+  // tree) can read the live camera pose at capture time without
+  // routing through a Zustand / context jungle.
+  const cameraRef = useRef<THREE.Camera | null>(null);
+  // ShoulderCamera publishes a recoil API here so the Shooter can
+  // inject camera kick without a direct ref back to the camera.
+  const cameraRecoilRef = useRef<CameraRecoilAPI | null>(null);
+
+  // Seeded once per scene. Stable identity is important — PlayerController
+  // treats `initialPose` as "snap to this" so we don't want to teleport
+  // the player every frame.
+  //
+  // Spawn rule: if a `SafetyZone_SM` object exists anywhere in the scene
+  // hierarchy, drop the player 5 m above it and let gravity + the per-frame
+  // ground raycast settle them onto the zone's top face. Fallback to the
+  // scene-framing center when no such anchor is present (dev scenes, legacy
+  // levels). The +5 m offset is a "close enough" fudge — big enough that
+  // we land on the object's actual top surface rather than on whatever
+  // floor is underneath it, small enough that the fall-in feels instant.
+  const initialPose: PlayerPose = useMemo(
+    () => {
+      const anchor = findNodeWorldPosition(scene.roots, 'SafetyZone_SM');
+      const spawnLiftAboveAnchor = 5;
+      const spawn: [number, number, number] = anchor
+        ? [anchor[0], anchor[1] + spawnLiftAboveAnchor, anchor[2]]
+        : [framing.center[0], framing.floorY + spawnLiftAboveAnchor, framing.center[2]];
+      if (anchor) {
+        // eslint-disable-next-line no-console
+        console.info(
+          `[play] spawn anchored on SafetyZone_SM @ (${anchor[0].toFixed(2)}, ${anchor[1].toFixed(2)}, ${anchor[2].toFixed(2)})`,
+        );
+      }
+      return defaultPose(
+        spawn,
+        // Clamp chase distance so it reads from a 20 m room up to a
+        // 400 m outdoor map. 6 % of the scene radius is roughly
+        // shoulder-distance for a human, floored at 4 m so a small
+        // prop scene still frames the avatar.
+        Math.max(4, Math.min(20, framing.radius * 0.06)),
+      );
+    },
+    [framing, scene.roots],
+  );
+
+  const enterPlay = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      // Canvas still mounting; flip the state flag anyway and let the
+      // user click the canvas to acquire pointer lock manually.
+      resetPlayModeState();
+      setPlayMode(true);
+      return;
+    }
+    // Wipe any residual firing / fireTick / muzzle state from a
+    // prior Play session so the first shot of a new session isn't
+    // treated as "already firing".
+    resetPlayModeState();
+    setPlayMode(true);
+    // Must be called synchronously inside the click handler so the
+    // user gesture is honoured. `requestPointerLock` returns a Promise
+    // on modern Chrome; swallow rejection (e.g. insecure context)
+    // without reverting the flag — user can re-click the canvas.
+    const result = canvas.requestPointerLock?.();
+    if (result && typeof (result as Promise<void>).catch === 'function') {
+      (result as Promise<void>).catch(() => {
+        /* pointer-lock refused; stay in play mode, they can click the
+           canvas to retry */
+      });
+    }
+  }, []);
+
+  const exitPlay = useCallback(() => {
+    setPlayMode(false);
+    // Uncrouch on exit so re-entering Play starts in the default
+    // standing stance. Otherwise a user who crouches, exits, and
+    // re-enters would find themselves already crouched, with no
+    // visible UI affordance to undo it.
+    setCrouching(false);
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+  }, []);
+
+  // Mirror the React `crouching` state into the mutable shared
+  // playModeState ref so non-React consumers (PlayerController,
+  // CharacterAvatar) see the same value each frame without having
+  // to accept it as a prop.
+  useEffect(() => {
+    playModeState.crouching = crouching;
+  }, [crouching]);
+
+  // Drive a top-level body class while in Play mode so the global
+  // app chrome (header with "Aegis Level Viewer" title, Back/Scenes
+  // buttons, Git Sync) can hide itself via CSS. The header is rendered
+  // by `App.tsx` — a parent of this route — so we can't conditionally
+  // unmount it from here without threading state up. Toggling a body
+  // class is a small, self-contained side-effect that cleans itself up
+  // on unmount (e.g. navigating away mid-play).
+  useEffect(() => {
+    if (!playMode) return;
+    document.body.classList.add('play-mode');
+    return () => {
+      document.body.classList.remove('play-mode');
+    };
+  }, [playMode]);
+
+  // C key → toggle crouch. Only active while Play is on (we scope
+  // the listener on `playMode` dep). Repeat events from a held key
+  // are ignored so holding C doesn't thrash the stance.
+  useEffect(() => {
+    if (!playMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyC') return;
+      if (e.repeat) return;
+      setCrouching((v) => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [playMode]);
+
+  // Bind Play mode to pointer-lock ownership. When the browser
+  // releases the lock (user hit ESC, tabbed out, canvas lost focus),
+  // fall back to editor mode. `wasLocked` guards against the first
+  // `pointerlockchange` that fires BEFORE we've locked from exiting
+  // us prematurely. The composer exception: when the lock is
+  // released specifically because we opened the feedback composer,
+  // don't collapse play mode — the composer itself will re-acquire
+  // the lock (or exit) on close.
+  useEffect(() => {
+    const wasLocked = { current: false };
+    const onChange = () => {
+      const isLocked = document.pointerLockElement === canvasRef.current;
+      if (wasLocked.current && !isLocked && !composerOpenRef.current) {
+        setPlayMode(false);
+      }
+      wasLocked.current = isLocked;
+    };
+    document.addEventListener('pointerlockchange', onChange);
+    return () => document.removeEventListener('pointerlockchange', onChange);
+  }, []);
+
+  // Enter → capture current frame + aim + camera pose into a
+  // FeedbackCaptureContext and open the composer. Gated on:
+  //   - Play mode ON (Enter is harmless in the editor)
+  //   - pointer lock active (so we know the user was actually aiming
+  //     at something via the centred reticle, not typing into some
+  //     stray input field)
+  //   - `aimValid` — refuse to anchor a feedback on the sky-fallback
+  //     far point. User-visible toast would be nicer but the usual
+  //     cause (crosshair pointed into skybox) self-corrects as soon
+  //     as they aim at real geometry, so a silent no-op is fine.
+  //   - composer not already open
+  //
+  // Capture happens synchronously inside the key handler so the
+  // canvas buffer we toDataURL belongs to the same frame the user
+  // saw. We enable `gl.preserveDrawingBuffer` below — without it,
+  // toDataURL returns a blank image because three.js clears the
+  // back buffer immediately after present. Note the per-frame cost
+  // of preserveDrawingBuffer is negligible for our scene sizes.
+  useEffect(() => {
+    if (!playMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      if (composerOpenRef.current) return;
+      if (document.pointerLockElement !== canvasRef.current) return;
+      if (!playModeState.aimValid) return;
+      const canvas = canvasRef.current;
+      const cam = cameraRef.current;
+      const handle = playerHandleRef.current;
+      if (!canvas || !cam || !handle) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      let thumbnail = '';
+      try {
+        thumbnail = canvas.toDataURL('image/png');
+      } catch (err) {
+        // preserveDrawingBuffer should make this always succeed, but
+        // CORS-tainted scenes (e.g. remote textures without CORS
+        // headers) can still throw on read-back. Surface and bail.
+        // eslint-disable-next-line no-console
+        console.warn('[feedback] canvas.toDataURL failed:', err);
+        return;
+      }
+      const aim = playModeState.aimPoint;
+      const pose = handle.getPose();
+      const persp = cam as THREE.PerspectiveCamera;
+      const capture: FeedbackCaptureContext = {
+        scenePath: relPath,
+        anchor: [aim.x, aim.y, aim.z],
+        thumbnail,
+        cameraPose: {
+          position: [cam.position.x, cam.position.y, cam.position.z],
+          quaternion: [
+            cam.quaternion.x,
+            cam.quaternion.y,
+            cam.quaternion.z,
+            cam.quaternion.w,
+          ],
+          fov: typeof persp.fov === 'number' ? persp.fov : 50,
+        },
+        playerPose: {
+          position: pose.position,
+          yaw: pose.yaw,
+        },
+      };
+      setComposer(capture);
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [playMode, relPath]);
+
+  // Re-acquire pointer lock after the composer closes — matches the
+  // user's expectation "I pressed Enter to leave a note, now I'm
+  // back in the game". On rare occasion the browser refuses the
+  // request (e.g. the user Alt-Tabbed during composition); in that
+  // case we fall through to the existing canvas-click re-lock path.
+  const handleComposerClose = useCallback(() => {
+    setComposer(null);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    // Microtask delay so the pointerlockchange event from the
+    // composer's open-time exitPointerLock settles before we
+    // re-request. Without this, Chrome sometimes drops the second
+    // request as "already in transition".
+    queueMicrotask(() => {
+      if (document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock?.();
+      }
+    });
+  }, []);
+
+  // When the canvas is clicked while Play is already ON but pointer
+  // isn't locked (e.g. user released lock via a transient focus loss
+  // and now wants back in), re-acquire.
+  useEffect(() => {
+    if (!playMode) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onClick = () => {
+      if (document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock?.();
+      }
+    };
+    canvas.addEventListener('click', onClick);
+    return () => canvas.removeEventListener('click', onClick);
+  }, [playMode]);
+
   return (
     <div className="viewer-root">
+      {/* Editor HUD + inspector live OUTSIDE of Play mode. Play mode
+          is meant to feel like a first-class gameplay session, not a
+          debug view, so we collapse every authoring affordance (scene
+          metadata, collider toggles, debug render modes, rebake
+          controls, the inspector panel, any picking outlines) and
+          surface only the Play status strip with its Esc hint.
+          Rendering is gated at the JSX level rather than via CSS
+          `display:none` so the expensive inspector subtree (which
+          includes selected-node traversal and per-mesh stats) isn't
+          computed at all while the user is playing. */}
+      {!playMode && (
       <div className="viewer-hud">
         <div className="title">{scene.name}</div>
         <div className="muted">{scene.relPath}</div>
@@ -211,6 +601,7 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
         </div>
         <RebakeButton relPath={relPath} />
       </div>
+      )}
       <Canvas
         key={scene.relPath}
         camera={{
@@ -219,31 +610,52 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
           near: framing.near,
           far: framing.far,
         }}
+        // `preserveDrawingBuffer` is required for `canvas.toDataURL`
+        // to return a non-blank image after present. We snapshot the
+        // canvas when the user presses Enter to author feedback; the
+        // frame-per-frame cost of keeping the back buffer around is
+        // small and the feature is unusable without it.
+        gl={{ preserveDrawingBuffer: true }}
         style={{ background: '#0b0d11' }}
+        onCreated={({ gl }) => {
+          // Capture the underlying DOM canvas so `enterPlay` can
+          // request pointer lock on it inside the click handler.
+          canvasRef.current = gl.domElement;
+        }}
         onPointerMissed={(e) => {
           // Click on empty space deselects. r3f fires this when no mesh
           // intercepted the pointer. Filter to button 0 so camera drags
           // that end on empty space don't clobber the selection.
+          // Suppressed in Play mode: clicks there are reserved for
+          // pointer-lock re-acquisition and (eventually) shooting.
+          if (playMode) return;
           if ((e as MouseEvent).button === 0) setSelection(null);
         }}
       >
         <DebugSceneHook />
+        <CameraRefBridge cameraRef={cameraRef} />
         <Suspense fallback={null}>
           {/* SceneRoots instantiates the scene lights + ambient + fog
               internally so we don't duplicate them here. */}
-          <Grid
-            args={[200, 200]}
-            position={[0, framing.floorY, 0]}
-            cellSize={Math.max(0.5, framing.radius / 40)}
-            sectionSize={Math.max(5, framing.radius / 5)}
-            cellThickness={0.6}
-            sectionThickness={1.2}
-            infiniteGrid
-            fadeDistance={framing.radius * 6}
-            fadeStrength={1}
-            cellColor="#2a3242"
-            sectionColor="#3c4a66"
-          />
+          {/* Grid is a visual reference only — the wrapping group's
+              `noCollide` keeps PlayerController's collision raycasts
+              from treating it as a floor, even though drei renders
+              it as a screen-facing mesh. */}
+          <group userData={{ noCollide: true }}>
+            <Grid
+              args={[200, 200]}
+              position={[0, framing.floorY, 0]}
+              cellSize={Math.max(0.5, framing.radius / 40)}
+              sectionSize={Math.max(5, framing.radius / 5)}
+              cellThickness={0.6}
+              sectionThickness={1.2}
+              infiniteGrid
+              fadeDistance={framing.radius * 6}
+              fadeStrength={1}
+              cellColor="#2a3242"
+              sectionColor="#3c4a66"
+            />
+          </group>
           <SelectionProvider
             selectedGroupUuid={selection?.groupUuid ?? null}
             setSelection={setSelection}
@@ -264,15 +676,59 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
             />
           </SelectionProvider>
           <OrbitControls
-            makeDefault
+            ref={orbitRef}
+            makeDefault={!playMode}
+            enabled={!playMode}
             target={framing.center}
             minDistance={framing.radius * 0.1}
             maxDistance={framing.radius * 10}
           />
-          <axesHelper args={[Math.min(5, framing.radius * 0.1)]} />
+          <OrbitStateKeeper playMode={playMode} orbitRef={orbitRef} />
+          {playMode && (
+            <>
+              <PlayerController
+                ref={playerHandleRef}
+                initialPose={initialPose}
+              />
+              {/* Aegis Stand_Default is the baseline: 2.3 m distance,
+                  80° FOV, 0.45 m shoulder, 0.5 m vertical arm, 1.0 m
+                  camera offset. Preset-driven so swapping to aim / ads
+                  later is a one-line change. We intentionally don't
+                  pass `initialDistance` so the preset's 2.3 m wins —
+                  scene-radius heuristics are for the ORBITAL camera,
+                  not the over-the-shoulder rig. */}
+              <ShoulderCamera
+                playerHandle={playerHandleRef}
+                preset="Stand_Default"
+                crouching={crouching}
+                initialPitch={initialPose.cameraPitch}
+                initialYaw={initialPose.cameraYaw}
+                recoilHandleRef={cameraRecoilRef}
+              />
+              {/* Hitscan LMG: LMB-hold fires while pointer is locked.
+                  Tracers + impact markers live inside the shooter
+                  component; `cameraRecoilRef` is populated by the
+                  camera above and consumed here to kick the view on
+                  each shot. */}
+              <Shooter
+                enabled={playMode}
+                canvasRef={canvasRef}
+                cameraRecoilRef={cameraRecoilRef}
+              />
+            </>
+          )}
+          {/* Feedback pins — render in both play and edit modes so
+              yesterday's feedback stays visible during tomorrow's
+              walk-through. `scenePath` keys the list so switching
+              scenes filters cleanly. */}
+          <FeedbackPins scenePath={relPath} />
+          <axesHelper
+            args={[Math.min(5, framing.radius * 0.1)]}
+            userData={{ noCollide: true }}
+          />
         </Suspense>
       </Canvas>
-      {selection && (
+      {selection && !playMode && (
         <InspectorPanel
           selection={selection}
           materials={scene.materials}
@@ -282,6 +738,47 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
           slotPermutations={slotPermutations}
           setSlotPermutation={setSlotPermutation}
           debugSubmeshColors={debugSubmeshColors}
+        />
+      )}
+      {/* Service-style entry point. Intentionally separate from the
+          debug toggle strip — Play mode is the headline feature of the
+          viewer, not a diagnostic. Shown only when we're NOT already in
+          Play mode. */}
+      {!playMode && (
+        <button
+          type="button"
+          className="play-fab"
+          onClick={enterPlay}
+          title="Enter Play mode — walk the level in third person (WASD, mouse look)"
+        >
+          <span className="play-fab-icon" aria-hidden>▶</span>
+          <span className="play-fab-label">Play</span>
+        </button>
+      )}
+      {/* In-session status strip. Thin, non-intrusive, always visible
+          above the scene so the user remembers Esc ends the session. */}
+      {playMode && (
+        // Minimal strip — the only authoring affordance we keep in
+        // Play mode is the Esc reminder + the Enter hint. Keeping the
+        // Enter-to-feedback hint in the status strip is deliberate: a
+        // pure no-UI clue for "press Enter to mark where you're
+        // looking" would be invisible to anyone but us.
+        <div className="play-status play-status-minimal">
+          <span className="play-status-hint">Enter: 피드백 · Esc: 나가기</span>
+        </div>
+      )}
+      {/* Feedback panel — list of authored feedbacks, edit-mode only.
+          Hidden during Play so it doesn't clutter the game view. */}
+      {!playMode && <FeedbackPanel scenePath={relPath} />}
+      {/* Feedback composer — HTML modal that takes the text body.
+          Rendered outside the Canvas so it receives normal DOM
+          focus / keyboard events. Closes via either submit or Esc;
+          `handleComposerClose` re-requests pointer lock so the user
+          lands back in Play mode. */}
+      {composer && (
+        <FeedbackComposer
+          capture={composer}
+          onClose={handleComposerClose}
         />
       )}
     </div>

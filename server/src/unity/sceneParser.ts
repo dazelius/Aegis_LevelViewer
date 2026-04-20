@@ -140,7 +140,7 @@ export interface MaterialJson {
 }
 
 /** Convert a server-side `ParsedMaterial` to the wire format sent to the client. */
-function toMaterialJson(p: ParsedMaterial): MaterialJson {
+export function toMaterialJson(p: ParsedMaterial): MaterialJson {
   // Unity `_Cull` float: 0 = Off (double-sided), 1 = Front, 2 = Back.
   // Three.js `DoubleSide` corresponds to Cull=Off. Unity's default is 2
   // (cull back, aka front-facing only — visually equivalent to

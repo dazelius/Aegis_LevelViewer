@@ -530,6 +530,14 @@ function SceneNode({ node }: { node: GameObjectNode }) {
     // OrbitControls can still pan / rotate the view when the cursor starts
     // over geometry.
     if (e.nativeEvent.button !== 0) return;
+    // Play mode owns left-click (hitscan fire). Pointer lock is our
+    // authoritative "are we currently playing?" signal because
+    // `enterPlay` requests it unconditionally and the escape key
+    // releases it via the browser's own pointerlockchange path — so
+    // we don't need to thread React state down into the scene graph
+    // just for this guard. Without this check, picking would re-open
+    // the Inspector on every shot.
+    if (document.pointerLockElement) return;
     e.stopPropagation();
     // Capture pick-point UV diagnostics BEFORE we reset any state. `e.uv`
     // is the barycentric-interpolated UV0 at the ray hit, and `e.face.a/b/c`
@@ -1881,7 +1889,7 @@ function getCachedTexture(
  * "unknown" shaderKind defaults to lit — it's safer to over-light than
  * under-light, and most custom Aegis shaders are lit variants anyway.
  */
-function buildMaterial(
+export function buildMaterial(
   src: MaterialJson,
   doubleSidedHint: boolean,
   opts: { unlitPreview?: boolean; flipY?: boolean } = {},

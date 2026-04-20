@@ -40,8 +40,10 @@ initializeCanvas(
   })) as unknown as (width: number, height: number) => ImageData,
 );
 import { listScenes } from '../unity/sceneScanner.js';
-import { parseScene } from '../unity/sceneParser.js';
+import { parseScene, toMaterialJson } from '../unity/sceneParser.js';
 import { assetIndex } from '../unity/assetIndex.js';
+import { getFbxMeshInfo } from '../unity/metaParser.js';
+import { parseMaterialByGuid } from '../unity/materialParser.js';
 import { syncUnityRepo } from '../git/gitSync.js';
 import { getAssetsDir } from '../config.js';
 import {
@@ -392,6 +394,64 @@ apiRouter.get('/assets/mesh', async (req: Request, res: Response) => {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: 'mesh read failed', message });
   }
+});
+
+/**
+ * Character / standalone-FBX material bundle.
+ *
+ * Query: `?guid=<fbx_guid>`
+ * Response: `{ materials: { [embeddedMaterialName]: MaterialJson } }`
+ *
+ * Unity imports FBX materials via `ModelImporter.externalObjects` —
+ * each embedded material NAME (e.g. `m_striker.001`) is remapped to
+ * an external `.mat` GUID. Scenes that reference the FBX already get
+ * this info baked into `SceneJson.fbxExternalMaterials`, but the
+ * player-character loader fetches the FBX directly (there's no parent
+ * scene), so it needs the same `name → MaterialJson` table on its own.
+ *
+ * Rather than invent a second wire format, we reuse the existing
+ * `MaterialJson` shape from `SceneJson.materials` so the client can
+ * feed the result straight into its `buildMaterial` function.
+ *
+ * Fails soft: FBXes with no external remap return `{ materials: {} }`
+ * (status 200). The caller is expected to fall back to the FBX's own
+ * embedded material names + default grey, not to show a load error —
+ * the avatar is still useful without perfect textures.
+ */
+apiRouter.get('/assets/fbx-character-materials', async (req: Request, res: Response) => {
+  const guidRaw = typeof req.query.guid === 'string' ? req.query.guid : '';
+  const guid = guidRaw.toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(guid)) {
+    res.status(400).json({ error: 'bad guid' });
+    return;
+  }
+  const info = await getFbxMeshInfo(guid);
+  if (!info) {
+    res.status(404).json({ error: 'fbx not indexed or meta unreadable', guid });
+    return;
+  }
+  const out: Record<string, ReturnType<typeof toMaterialJson>> = {};
+  // Parse each unique material once — many characters share e.g. a
+  // single `m_striker` mat across multiple `.001` / `.002` duplicates
+  // created when the FBX re-imports splits submeshes. We iterate the
+  // name table (not the GUID list) so the key the client sees matches
+  // what `SkinnedMesh.material[i].name` will return from FBXLoader.
+  const cache = new Map<string, ReturnType<typeof toMaterialJson> | null>();
+  for (const [name, matGuid] of info.materialByName.entries()) {
+    let json = cache.get(matGuid);
+    if (json === undefined) {
+      try {
+        const parsed = await parseMaterialByGuid(matGuid);
+        json = parsed ? toMaterialJson(parsed) : null;
+      } catch {
+        json = null;
+      }
+      cache.set(matGuid, json);
+    }
+    if (json) out[name] = json;
+  }
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.json({ materials: out });
 });
 
 /** 1x1 fully transparent PNG (67 bytes). */
