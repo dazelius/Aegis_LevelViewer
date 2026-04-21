@@ -35,7 +35,7 @@ export async function applyUrlRewritesToRepo(repoDir: string): Promise<void> {
  */
 // Bump this whenever the perf config entries change so that existing
 // clones re-apply on next boot instead of relying on a stale sentinel.
-const PERF_CONFIG_VERSION = 'v2-lfs-concurrent';
+const PERF_CONFIG_VERSION = 'v3-lfs-resume';
 
 async function applyRepoPerfConfig(repoDir: string): Promise<void> {
   const sentinel = path.join(repoDir, '.git', '.aegis-perf-applied');
@@ -60,10 +60,21 @@ async function applyRepoPerfConfig(repoDir: string): Promise<void> {
     // rewrite target (~172.31.x.x) we can pin ~16 concurrent object
     // downloads with no ill effect, and overall wall-clock of bulk
     // prefetch drops roughly linearly until the network is saturated.
+    ['lfs.concurrenttransfers', '16'],
+    // Resume support: git-lfs natively resumes partial downloads via
+    // HTTP Range requests against the cached byte-count in
+    // `.git/lfs/tmp/<oid>`. That only helps if we give retries enough
+    // time and attempts to take advantage of it.
+    //   - `maxretries=3`       tolerate transient hiccups mid-blob
+    //   - `activitytimeout=60` drop truly idle sockets at 60 s, not 10
+    //   - `dialtimeout=20`     let a slow TCP handshake on an internal
+    //                          endpoint complete
+    ['lfs.transfer.maxretries', '3'],
+    ['lfs.activitytimeout', '60'],
+    ['lfs.dialtimeout', '20'],
     // `fetchrecentrefsdays=0` turns off git-lfs's built-in "also fetch
     // recent refs" background prefetch, which we don't need because
     // lazyLfs is explicit about what it wants.
-    ['lfs.concurrenttransfers', '16'],
     ['lfs.fetchrecentrefsdays', '0'],
     ['lfs.fetchrecentcommitsdays', '0'],
     ['lfs.pruneoffsetdays', '14'],
@@ -85,7 +96,8 @@ async function applyRepoPerfConfig(repoDir: string): Promise<void> {
     fs.writeFileSync(sentinel, `${PERF_CONFIG_VERSION}\n${new Date().toISOString()}\n`);
     console.log(
       `[gitSync] applied perf config (${PERF_CONFIG_VERSION}): ` +
-        'fsmonitor, untrackedCache, lfs.concurrenttransfers=16',
+        'fsmonitor, untrackedCache, lfs.concurrenttransfers=16, ' +
+        'lfs.transfer.maxretries=3 (HTTP Range resume)',
     );
   } catch {
     // sentinel is just an optimisation — if it can't be written we just

@@ -234,17 +234,55 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       // Deliberately do NOT pass `lfs.skipdownloaderrors=true` here.
       // Under skipdownloaderrors, git-lfs swallows per-object failures
       // (401 / 404 / timeout) and exits 0 with no blob on disk — we
-      // get silent breakage that looks like a successful fetch. For
-      // lazy, single-file fetches we'd rather see the real error so
-      // it surfaces in the catch block below and we can act on it.
-      // `lfs.transfer.maxretries=1` shortens the wall-time of an
-      // unreachable LFS endpoint from minutes to seconds — lazy LFS
-      // is on the user's request path, so we can't afford to hang.
+      // get silent breakage that looks like a successful fetch.
       //
-      // Wall-clock timeout (90 s) is belt-and-suspenders: if git-lfs
-      // somehow wedges despite its own activitytimeout, we reject the
-      // chain so subsequent requests don't queue behind a dead fetch.
-      const FETCH_TIMEOUT_MS = 90_000;
+      // `lfs.transfer.maxretries=3`: enough retries for transient
+      // network blips without turning a dead endpoint into a minute-
+      // long hang. Critically, within a single `git lfs fetch` call,
+      // a retry after a partial download reads the existing bytes in
+      // `.git/lfs/tmp/<oid>` and resumes the HTTP transfer with a
+      // `Range:` header — this is how you actually get "이어받기"
+      // semantics for a big blob that failed halfway. Between
+      // separate fetches the same tmp file is also honoured, so
+      // killing the process (including our wall-clock timeout below)
+      // doesn't discard partial progress.
+      //
+      // Wall-clock timeout 240 s for bulk/batched calls: a single
+      // 2 GB blob on a 100 Mbps internal link takes ~180 s — we need
+      // head-room above that so resume actually has a chance to
+      // complete instead of looping forever. If git-lfs wedges
+      // completely, this still rejects the chain so subsequent
+      // requests don't queue behind a dead fetch.
+      const FETCH_TIMEOUT_MS = 240_000;
+      // Log any currently-cached partial downloads in .git/lfs/tmp/
+      // so operators can see what's being resumed vs started fresh.
+      // Best-effort; never blocks the fetch on filesystem errors.
+      const tmpDir = path.join(repoDir, '.git', 'lfs', 'tmp');
+      let resumingCount = 0;
+      let resumingBytes = 0;
+      try {
+        const entries = fsSync.readdirSync(tmpDir, { withFileTypes: true });
+        for (const e of entries) {
+          if (!e.isFile()) continue;
+          try {
+            const st = fsSync.statSync(path.join(tmpDir, e.name));
+            if (st.size > 0) {
+              resumingCount += 1;
+              resumingBytes += st.size;
+            }
+          } catch {
+            // transient stat error — skip
+          }
+        }
+      } catch {
+        // tmp dir may not exist yet on a fresh repo
+      }
+      if (resumingCount > 0) {
+        console.log(
+          `[lazyLfs] resuming ${resumingCount} partial LFS download(s) ` +
+            `(${(resumingBytes / (1024 * 1024)).toFixed(1)} MB already cached)`,
+        );
+      }
       // URL rewrites (`url.X.insteadOf`) are persisted in the repo's
       // local config by gitSync.persistUrlRewritesInRepo, so this
       // call inherits them automatically — no env/flag injection
@@ -253,7 +291,7 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       // reliably propagate into git-lfs's internal smudge/filter
       // subprocesses anyway.
       const fetchPromise = git.raw([
-        '-c', 'lfs.transfer.maxretries=1',
+        '-c', 'lfs.transfer.maxretries=3',
         'lfs', 'fetch', '--include', include,
       ]);
       await Promise.race([
