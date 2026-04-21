@@ -210,6 +210,9 @@ async function main() {
   setPhase('binding-port');
   await startPlaceholder();
 
+  const forceLive =
+    (process.env.AEGISGRAM_FORCE_LIVE || '').toLowerCase() === 'true';
+
   // Step 1: install deps if the tree is bare.
   const hasNodeModules = exists('node_modules') && exists('node_modules/express');
   if (!hasNodeModules) {
@@ -224,7 +227,7 @@ async function main() {
   }
 
   // Step 2: build web.
-  if (!exists('web/dist/index.html')) {
+  if (!exists('web/dist/index.html') || forceLive) {
     setPhase('building-web');
     run('npm', ['run', 'build', '--workspace=web']);
   } else {
@@ -232,7 +235,11 @@ async function main() {
   }
 
   // Step 3: build server.
-  if (!exists('server/dist/index.js')) {
+  // Always rebuild when AEGISGRAM_FORCE_LIVE is set — cached dist/ from
+  // a previous deploy may contain stale compiled JS that predates code
+  // changes (e.g. lazy LFS, text-only startup fetch). The build is fast
+  // (~4s) and guarantees the running code matches the checked-out source.
+  if (!exists('server/dist/index.js') || forceLive) {
     setPhase('building-server');
     run('npm', ['run', 'build', '--workspace=server']);
   } else {
@@ -242,9 +249,6 @@ async function main() {
   // Step 4: bake content bundle — SKIPPED when AEGISGRAM_FORCE_LIVE is
   // set, because live mode + lazy LFS means the server will pull assets
   // on demand at request time instead of baking everything upfront.
-  const forceLive =
-    (process.env.AEGISGRAM_FORCE_LIVE || '').toLowerCase() === 'true';
-
   if (forceLive) {
     log('AEGISGRAM_FORCE_LIVE=true — skipping bake; server will start in live mode with lazy LFS');
   } else if (!exists('data/bundle/manifest.json')) {
