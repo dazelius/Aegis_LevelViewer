@@ -43,6 +43,7 @@ if (!process.env.LEVEL_VIEWER_GIT_FETCH_LFS) {
   process.env.LEVEL_VIEWER_GIT_FETCH_LFS = 'true';
 }
 
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -304,9 +305,106 @@ async function bakeScene(relPath: string, absPath: string): Promise<BakedSceneRe
 }
 
 // ---------------------------------------------------------------------
+// Preflight — surface every common "why is my clone silently dying"
+// failure mode in one fail-fast block with human-readable output.
+//
+// The bake's very first action is a `git clone` against the configured
+// GitLab, and when that silently hangs or exits 1 it's almost always
+// one of:
+//   - git / git-lfs not installed on the host
+//   - URL requires auth but no `GITLAB_REPO2_TOKEN` was provided, so
+//     git CLI blocks waiting for credentials from a TTY that doesn't
+//     exist, then the platform's silence-timeout kills the process
+//   - URL scheme is http:// and the host disallows unencrypted
+//     credentials
+// We print a single diagnostic block and intentionally throw early
+// when the combo is unworkable, so the platform operator sees a
+// clear error instead of "process exited with code 1".
+// Everything is written to STDOUT (even errors) because many
+// platform log viewers surface stdout but truncate stderr.
+// ---------------------------------------------------------------------
+function which(cmd: string): { ok: true; version: string } | { ok: false; message: string } {
+  try {
+    const res = spawnSync(cmd, ['--version'], {
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+    });
+    if (res.status === 0) {
+      return { ok: true, version: res.stdout.trim().split('\n')[0] };
+    }
+    return { ok: false, message: res.stderr.trim() || `exit ${res.status}` };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
+}
+
+function maskUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    if (u.password) u.password = '***';
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
+function preflight(): void {
+  console.log('[bake] ==================== PREFLIGHT ====================');
+  console.log(`[bake] node:      ${process.version} (${process.platform}/${process.arch})`);
+  console.log(`[bake] cwd:       ${process.cwd()}`);
+
+  const git = which('git');
+  if (git.ok) {
+    console.log(`[bake] git:       ${git.version}`);
+  } else {
+    console.log(`[bake] git:       NOT FOUND — ${git.message}`);
+    throw new Error(
+      'git CLI is required but not installed on this host. Install git (and git-lfs) and retry.',
+    );
+  }
+
+  const gitLfs = which('git-lfs');
+  if (gitLfs.ok) {
+    console.log(`[bake] git-lfs:   ${gitLfs.version}`);
+  } else {
+    console.log(
+      `[bake] git-lfs:   NOT FOUND — ${gitLfs.message}. LFS assets (textures, FBX) will NOT be pulled; bundle will be incomplete.`,
+    );
+    // Soft warning. Scene YAML will still come through because it's
+    // text-tracked in Aegis; only the binary blobs go missing.
+  }
+
+  const url = config.gitlabRepo2Url;
+  const token = config.gitlabRepo2Token;
+  const authed = token && url;
+  console.log(`[bake] repo URL:  ${maskUrl(url)}`);
+  console.log(`[bake] repo auth: ${authed ? 'token present' : 'NO token (anonymous clone)'}`);
+  if (!authed) {
+    console.log(
+      '[bake] hint:      set GITLAB_REPO2_TOKEN (or bake against an SSH URL with deploy key) ' +
+        'if your GitLab requires authentication. Silent clone failures with no error output ' +
+        'almost always mean git CLI is blocked on a credential prompt.',
+    );
+  }
+  if (url.startsWith('http://')) {
+    console.log(
+      '[bake] note:      URL is plain HTTP — some GitLab setups disable credentials over http. ' +
+        'Use https:// if auth is required.',
+    );
+  }
+
+  console.log(`[bake] branch:    ${config.gitBranch}`);
+  console.log(`[bake] lfs fetch: ${config.gitFetchLfs ? 'full' : 'text-only'}`);
+  console.log(`[bake] bundle:    ${config.bundleDir}`);
+  console.log('[bake] ===================================================');
+}
+
+// ---------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------
 async function main(): Promise<void> {
+  preflight();
+
   const bundleDir = config.bundleDir;
   const scenesOutDir = path.join(bundleDir, 'scenes');
   const blobsOutDir = path.join(bundleDir, 'blobs');
@@ -319,6 +417,13 @@ async function main(): Promise<void> {
   console.log('[bake] syncing Aegis repo...');
   const syncResult = await syncUnityRepo();
   console.log(`[bake] sync: ${syncResult.action}${syncResult.head ? ` @ ${syncResult.head}` : ''}`);
+  if (syncResult.action === 'skipped' && syncResult.message?.startsWith('clone failed')) {
+    // Hard fail — the rest of the bake has nothing to work on and would
+    // produce an empty bundle. Better to stop with a clear error now.
+    throw new Error(
+      `Aegis clone failed: ${syncResult.message}. Check the PREFLIGHT block above for missing token / git-lfs.`,
+    );
+  }
 
   // --- 2. Build the asset index ---------------------------------------------
   console.log('[bake] building asset index...');
