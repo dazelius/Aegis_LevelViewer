@@ -239,8 +239,15 @@ async function main() {
     log('server/dist already built');
   }
 
-  // Step 4: bake content bundle.
-  if (!exists('data/bundle/manifest.json')) {
+  // Step 4: bake content bundle — SKIPPED when AEGISGRAM_FORCE_LIVE is
+  // set, because live mode + lazy LFS means the server will pull assets
+  // on demand at request time instead of baking everything upfront.
+  const forceLive =
+    (process.env.AEGISGRAM_FORCE_LIVE || '').toLowerCase() === 'true';
+
+  if (forceLive) {
+    log('AEGISGRAM_FORCE_LIVE=true — skipping bake; server will start in live mode with lazy LFS');
+  } else if (!exists('data/bundle/manifest.json')) {
     if (process.env.GITLAB_REPO2_URL) {
       setPhase('baking-bundle', 'cloning + LFS pull + scene export (slow)');
       // Force full-LFS mode for the child bake process. MUST be set
