@@ -168,12 +168,31 @@ const BINARY_EXTS = [
   '*.obj',
 ];
 
-async function runLfsPullBatch(
+/**
+ * Run `git lfs fetch --include=<pattern>` with `lfs.skipdownloaderrors`
+ * on. That config tells git-lfs to log each missing object as a
+ * warning and keep downloading the rest instead of giving up on the
+ * first Scanner error. Project Aegis's LFS server has several
+ * pointers whose blobs are gone upstream, and without this flag a
+ * single such pointer poisons the whole batch.
+ *
+ * We still wrap in try/catch because even with skipdownloaderrors
+ * some git-lfs versions return non-zero at the end if any object
+ * was skipped — harmless, we just don't want it to propagate.
+ */
+async function runLfsFetchBatch(
   lfsGit: SimpleGit,
   include: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    await lfsGit.raw(['lfs', 'pull', '--include', include]);
+    await lfsGit.raw([
+      '-c',
+      'lfs.skipdownloaderrors=true',
+      'lfs',
+      'fetch',
+      '--include',
+      include,
+    ]);
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -194,14 +213,14 @@ async function fetchLfsAssets(targetDir: string): Promise<void> {
     : TEXT_ONLY_EXTS;
 
   console.log(
-    `[gitSync] lfs pull in ${batches.length} extension batches ` +
-      `(${config.gitFetchLfs ? 'full' : 'text-only'})...`,
+    `[gitSync] lfs fetch in ${batches.length} extension batches ` +
+      `(${config.gitFetchLfs ? 'full' : 'text-only'}, skipdownloaderrors=on)...`,
   );
 
   let okCount = 0;
   const failed: Array<{ ext: string; error: string }> = [];
   for (const ext of batches) {
-    const res = await runLfsPullBatch(lfsGit, ext);
+    const res = await runLfsFetchBatch(lfsGit, ext);
     if (res.ok) {
       okCount += 1;
       console.log(`[gitSync]   ${ext} OK`);
@@ -214,7 +233,22 @@ async function fetchLfsAssets(targetDir: string): Promise<void> {
     }
   }
 
-  console.log(`[gitSync] lfs pull: ${okCount} ok, ${failed.length} failed`);
+  // Smudge pass: lay down working-tree copies for every LFS pointer
+  // whose blob is now in the local cache. Separating fetch from
+  // checkout means that even if fetch returned non-zero halfway
+  // through, the objects it DID download get committed to the
+  // working tree here. `git lfs checkout` itself can't fail on
+  // missing objects — it silently leaves those files as pointers,
+  // which our downstream `isLfsPointer` guards handle gracefully.
+  try {
+    console.log('[gitSync] lfs checkout (smudging cached objects)...');
+    await lfsGit.raw(['lfs', 'checkout']);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[gitSync] lfs checkout warning (non-fatal): ${msg.split(/\r?\n/)[0]}`);
+  }
+
+  console.log(`[gitSync] lfs fetch: ${okCount} ok, ${failed.length} failed`);
   if (failed.length && okCount === 0) {
     // Every batch died — that usually means a global LFS problem
     // (auth, network, server down), not per-object corruption. Let
