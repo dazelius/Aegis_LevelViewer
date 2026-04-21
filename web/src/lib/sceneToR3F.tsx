@@ -520,6 +520,45 @@ function SceneNode({ node }: { node: GameObjectNode }) {
   const { position, quaternion, scale } = node.transform;
   const q = isValidQuaternion(quaternion) ? quaternion : ([0, 0, 0, 1] as const);
 
+  // For model-prefab PrefabInstances (`renderAllFbxMeshes=true`) we need to
+  // distinguish two scene-authoring patterns that both set
+  // `hasRotationOverride=true` on the synth'd root but have opposite
+  // rendering implications:
+  //
+  //   1. "drag the FBX in" (F_Sample): Unity's PrefabInstance m_Modifications
+  //      snapshot m_LocalRotation as (w=1, x=y=z=0) even though the designer
+  //      never rotated anything. The FBX is meant to render in whatever
+  //      orientation FBXLoader + our fbxCache rotation-bake produced.
+  //
+  //   2. "explicitly rotated" (DM_EV_A): the prefab author stored
+  //      m_LocalRotation with a real, non-identity value (e.g. -90° X to
+  //      convert a Z-up FBX into an upright tower). Unity applies this on
+  //      top of the FBX hierarchy's own axis conversion; the scene's
+  //      stored quaternion reflects the final world-space orientation
+  //      designer wanted.
+  //
+  // Our `<group quaternion={q}>` below unconditionally applies the stored
+  // rotation. For case 1 this is fine — `q = identity` is a no-op. For
+  // case 2 it double-rotates: fbxCache already baked the FBXLoader
+  // matrixWorld rotation (`P`) into vertices, so the mesh is already
+  // upright, and multiplying `q = P` on top gives `P * P * G = 2P * G`
+  // (tower flopped back to lying flat). `MultiMeshRendererProxy` needs
+  // to insert `inv(P)` to cancel the vertex bake in exactly this case.
+  // The check is the only reliable one we have that doesn't depend on
+  // parsing Unity's ModelImporter settings client-side: if the stored
+  // quaternion is effectively identity, treat it as case 1; otherwise
+  // case 2.
+  const Q_IDENTITY_EPS = 1e-4;
+  const sceneQuatIsIdentity =
+    Math.abs(Math.abs(q[3]) - 1) < Q_IDENTITY_EPS &&
+    Math.abs(q[0]) < Q_IDENTITY_EPS &&
+    Math.abs(q[1]) < Q_IDENTITY_EPS &&
+    Math.abs(q[2]) < Q_IDENTITY_EPS;
+  const needsModelPrefabUnbake =
+    !!node.renderer?.renderAllFbxMeshes &&
+    node.transform.hasRotationOverride &&
+    !sceneQuatIsIdentity;
+
   // Click handling: the innermost SceneNode under the cursor captures the
   // event (stopPropagation) so the selection targets the GameObject whose
   // renderer is visible at the pick point, not an ancestor group. Groups
@@ -684,6 +723,7 @@ function SceneNode({ node }: { node: GameObjectNode }) {
             renderer={node.renderer}
             gameObjectName={node.name}
             hasRotationOverride={node.transform.hasRotationOverride}
+            needsUnbake={needsModelPrefabUnbake}
           />
         ) : (
           <RendererProxy
@@ -991,40 +1031,62 @@ function useFbxEntry(guid: string | undefined): {
  *
  * For a multi-mesh model prefab, `Q_scene` is the FINAL rotation of the
  * expanded root in Unity — whatever m_LocalRotation the scene YAML stored
- * for this PrefabInstance's root transform. It is applied ON TOP of the
- * vertex-baked geometry, period. We do NOT use `hasRotationOverride` to
- * decide whether to unbake here.
+ * for this PrefabInstance's root transform. The SceneNode wrapper
+ * applies `Q_scene` to the outer `<group>` we render inside.
  *
- * Why: Unity's PrefabInstance `m_Modifications` ALWAYS snapshots the
- * instance's current m_LocalRotation even when the designer never
- * touched rotation (it's just how serialization works). Our server
- * interprets any such entry as `hasRotationOverride=true`, which was
- * intended to mean "the scene quaternion REPLACES the prefab's default
- * PreRotation" — but for Unity model prefabs with
- * `bakeAxisConversion=0`, the prefab-root's default rotation is
- * ALREADY identity (Unity's ModelImporter put the Z→Y axis conversion
- * inside the FBX hierarchy / mesh asset level, not on the root
- * transform). A scene override to identity is therefore a no-op, not a
- * replacement of anything. Inserting `inv(P)` in that case cancels the
- * only rotation we applied (the FBX hierarchy bake) and tips the whole
- * prefab onto its side — exactly what Factory_New_B → F_Sample hit.
+ * We distinguish TWO authoring patterns that both produce
+ * `hasRotationOverride=true` on the server side:
  *
- * So: render `Q_scene * (scale * (localPos + baked_vertex))` uniformly.
- * Single-mesh props (`RendererProxy` below) still need the unbake path
- * because for those the scene-authored quaternion Unity writes DOES
- * already include the PreRotation contribution — a product of how the
- * non-expanded MeshRenderer is attached directly to the scene's
- * GameObject. Keep that path unchanged until we have a concrete
- * multi-mesh case that proves otherwise.
+ *   1. "drag-the-FBX-in" (F_Sample in Factory_New_B): Unity's
+ *      PrefabInstance `m_Modifications` ALWAYS snapshots the instance's
+ *      current `m_LocalRotation` even when the designer never touched
+ *      rotation — it's just how the serializer works. The stored
+ *      quaternion is identity (w=1, x=y=z=0). For these, the FBX's
+ *      three.js-side rotation-bake IS the orientation we want
+ *      (it stands in for Unity's ModelImporter axis conversion), and
+ *      applying any `inv(P)` cancels that bake and flops the mesh
+ *      onto its side. Detection: `Q_scene ≈ identity` in the SceneNode
+ *      wrapper; the caller passes us `needsUnbake=false`.
+ *
+ *   2. "designer-rotated-the-root" (DM_EV_A in DesertMine): the prefab
+ *      author stored a real non-identity quaternion like `-90° X`
+ *      because the FBX is Z-up and the prefab is meant to display
+ *      upright. Unity combines its ModelImporter axis conversion with
+ *      the stored quaternion; the result is `Q_scene * G` at render
+ *      time, where `G` is the FBX vertex data in its native (Z-up)
+ *      frame. three.js's FBXLoader already folded the FBX's hierarchy
+ *      PreRotation `P` into `matrixWorld.rotation`, and fbxCache
+ *      baked that into the vertices, so our "baked_geom" equals
+ *      `P * G`. Rendering `Q_scene * baked_geom = Q_scene * P * G`
+ *      double-applies `P` and flops the prefab flat again. Inserting
+ *      `inv(P)` between the SceneNode group and the fbxRoot cancels
+ *      the bake so the final composition becomes `Q_scene * G` —
+ *      matching Unity. Detection: `Q_scene` non-identity AND the FBX's
+ *      first mesh has `hasBakedRotation=true`; caller passes
+ *      `needsUnbake=true`.
+ *
+ * Single-mesh props (`RendererProxy` below) use their own unbake logic
+ * scoped to the single-mesh case; that path stays unchanged.
  */
 function MultiMeshRendererProxy({
   renderer,
   gameObjectName,
   hasRotationOverride,
+  needsUnbake,
 }: {
   renderer: NonNullable<GameObjectNode['renderer']>;
   gameObjectName: string;
   hasRotationOverride: boolean;
+  /** True when the scene stored a non-identity `m_LocalRotation` on this
+   *  GameObject AND we're on the `renderAllFbxMeshes` path. Signals that
+   *  the designer's quaternion is authoritative (e.g. DM_EV_A's -90° X
+   *  to stand a Z-up FBX upright) and the `fbxCache` rotation-bake has
+   *  to be cancelled here, otherwise the rotation double-applies and
+   *  the mesh flops on its side. F_Sample-style "drag FBX into scene"
+   *  nodes get `needsUnbake=false` — their scene quaternion is a
+   *  serialization-noise identity and the bake itself stands in for
+   *  Unity's model-importer axis conversion, so no cancellation needed. */
+  needsUnbake: boolean;
 }) {
   // Render-phase mount trace. Runs EVERY render including the initial
   // "pending FBX load" one — lets us confirm the dispatch path in
@@ -1215,8 +1277,12 @@ function MultiMeshRendererProxy({
   // when FBX load finishes and the component promotes from the pending
   // placeholder path to the full mesh list path.
   //
-  // `hasRotationOverride` is logged for visibility but no longer gates any
-  // unbake behaviour (see the component docstring).
+  // `hasRotationOverride` + `needsUnbake` are logged together so a bad
+  // orientation can be diagnosed from the console alone: DM_EV_A should
+  // print `rotOverride=true needsUnbake=true firstHasBake=true`, while
+  // F_Sample should print `rotOverride=true needsUnbake=false
+  // firstHasBake=true` — the latter is our "serialization-noise identity"
+  // case that must NOT cancel the bake.
   useEffect(() => {
     if (!entry) return;
     const g0 = entry.allMeshes[0]?.geometry;
@@ -1226,10 +1292,10 @@ function MultiMeshRendererProxy({
     console.log(
       `[fbx-multi] ${gameObjectName} guid=${renderer.meshGuid?.slice(0, 8)} ` +
         `meshes=${entry.allMeshes.length} unitScale=${entry.unitScale} ` +
-        `rotOverride=${hasRotationOverride} firstHasBake=${firstHasBakeLog} ` +
+        `rotOverride=${hasRotationOverride} needsUnbake=${needsUnbake} firstHasBake=${firstHasBakeLog} ` +
         `bbox=${bb ? `(${bb.min.x.toFixed(1)},${bb.min.y.toFixed(1)},${bb.min.z.toFixed(1)})..(${bb.max.x.toFixed(1)},${bb.max.y.toFixed(1)},${bb.max.z.toFixed(1)})` : 'n/a'}`,
     );
-  }, [entry, gameObjectName, renderer.meshGuid, hasRotationOverride]);
+  }, [entry, gameObjectName, renderer.meshGuid, hasRotationOverride, needsUnbake]);
 
   if (!renderer.meshGuid) return null;
   if (status === 'pending') return null;
@@ -1332,9 +1398,36 @@ function MultiMeshRendererProxy({
     );
   });
 
-  return (
+  // Conditionally insert an `inv(bakedRotation)` wrapper when the scene
+  // stored a real non-identity quaternion and our fbxCache baked a non-
+  // identity rotation into the vertices. See the prop docstring and the
+  // SceneNode-side `needsModelPrefabUnbake` comment for the full story.
+  //
+  // `bakedRotation` is captured per-record but for a given FBX every
+  // record shares the same matrixWorld rotation at traversal time (it
+  // reflects the FBX-hierarchy axis conversion, which is a property of
+  // the FBX's own root PreRotation node, not of any single sub-mesh).
+  // Picking `allMeshes[0]` is therefore equivalent to any other slot —
+  // we just need one stable reference quaternion for the inverse.
+  const firstBake = entry.allMeshes[0];
+  const applyUnbake = needsUnbake && (firstBake?.hasBakedRotation ?? false);
+  const invBakeQuat: [number, number, number, number] = applyUnbake
+    ? [
+        -firstBake!.bakedRotation[0],
+        -firstBake!.bakedRotation[1],
+        -firstBake!.bakedRotation[2],
+        firstBake!.bakedRotation[3],
+      ]
+    : [0, 0, 0, 1];
+  const fbxRootGroup = (
     <group scale={[unitScale, unitScale, unitScale]} name={`${gameObjectName}__fbxRoot`}>
       {meshes}
+    </group>
+  );
+  if (!applyUnbake) return fbxRootGroup;
+  return (
+    <group quaternion={invBakeQuat} name={`${gameObjectName}__unbake`}>
+      {fbxRootGroup}
     </group>
   );
 }
