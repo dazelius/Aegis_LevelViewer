@@ -38,7 +38,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { simpleGit } from 'simple-git';
 import { assetIndex } from '../unity/assetIndex.js';
-import { getGitConfigEnv, getGitUrlRewriteFlags } from '../config.js';
 
 // ---------------------------------------------------------------------------
 // LFS pointer detection
@@ -182,7 +181,6 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
   if (relPaths.length === 0) return;
 
   const git = simpleGit(repoDir).env({
-    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
 
@@ -208,14 +206,14 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       // somehow wedges despite its own activitytimeout, we reject the
       // chain so subsequent requests don't queue behind a dead fetch.
       const FETCH_TIMEOUT_MS = 90_000;
-      // URL-rewrite flags (`-c url.X.insteadOf=Y`) MUST precede the
-      // subcommand so they apply to LFS's transport too. See config.ts
-      // for the operational reason — our GitLab LFS batch API hands out
-      // an unreachable external IP in `actions.download.href` and this
-      // rewrite patches it back to the internal IP that is actually
-      // reachable from the deploy host.
+      // URL rewrites (`url.X.insteadOf`) are persisted in the repo's
+      // local config by gitSync.persistUrlRewritesInRepo, so this
+      // call inherits them automatically — no env/flag injection
+      // needed here, which matters because git/simple-git block
+      // `GIT_CONFIG_COUNT` env as "unsafe", and `-c` flags don't
+      // reliably propagate into git-lfs's internal smudge/filter
+      // subprocesses anyway.
       const fetchPromise = git.raw([
-        ...getGitUrlRewriteFlags(),
         '-c', 'lfs.transfer.maxretries=1',
         'lfs', 'fetch', '--include', include,
       ]);

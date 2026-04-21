@@ -4,10 +4,42 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import {
   config,
   getAuthenticatedRepoUrl,
-  getGitConfigEnv,
+  getGitUrlRewriteFlags,
+  getGitUrlRewrites,
   getRepo2LocalDir,
   getSparsePaths,
 } from '../config.js';
+
+/**
+ * Persist `AEGISGRAM_GIT_URL_REWRITES` into the local repo's
+ * `.git/config` as `url.<to>.insteadOf` entries. Idempotent — we
+ * unset before setting so re-running doesn't accumulate duplicate
+ * multi-values. Once this runs, every subsequent git invocation
+ * on this repo (including git-lfs's internal smudge subprocesses
+ * that git-lfs spawns with its own env) picks up the rewrite
+ * automatically, which is what unblocks LFS fetches when the
+ * batch API hands out an unreachable download host.
+ */
+async function persistUrlRewritesInRepo(repoDir: string): Promise<void> {
+  const rewrites = getGitUrlRewrites();
+  if (rewrites.length === 0) return;
+  const inner = simpleGit(repoDir).env({
+    GIT_TERMINAL_PROMPT: '0',
+  } as Record<string, string>);
+  for (const { from, to } of rewrites) {
+    const key = `url.${to}.insteadOf`;
+    try {
+      // --unset-all is safe even when the key doesn't exist yet on
+      // some git versions; we swallow any non-fatal exit.
+      await inner.raw(['config', '--local', '--unset-all', key]).catch(() => {});
+      await inner.raw(['config', '--local', '--add', key, from]);
+      console.log(`[gitSync] persisted url rewrite: ${key}=${from}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[gitSync] failed to persist url rewrite ${key}: ${msg}`);
+    }
+  }
+}
 
 /**
  * Pipe a git subprocess's stdout+stderr to our own stdout with a `[git]`
@@ -87,7 +119,6 @@ async function cloneSparse(targetDir: string): Promise<void> {
   // clearly visible through our outputHandler below.
   const git = simpleGit(parent).env({
     ...lfsEnv,
-    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
   attachGitStreamLogger(git);
@@ -96,6 +127,11 @@ async function cloneSparse(targetDir: string): Promise<void> {
     'core.longpaths=true',
     '-c',
     'credential.helper=',
+    // URL rewrites applied during clone itself — the `-c` flags above
+    // only live for this one git call, which is enough because we
+    // persist the same rewrites into the cloned repo's local config
+    // below so future git/LFS calls inherit them.
+    ...getGitUrlRewriteFlags(),
     '--progress',
     '--filter=blob:none',
     '--no-checkout',
@@ -106,10 +142,12 @@ async function cloneSparse(targetDir: string): Promise<void> {
     '--single-branch',
   ]);
 
-  // Make the long-paths setting persistent on the local clone.
+  // Persist url rewrites + longpaths into the freshly-cloned repo so
+  // every subsequent git/LFS call on it picks them up automatically.
+  await persistUrlRewritesInRepo(targetDir);
+
   const inner: SimpleGit = simpleGit(targetDir).env({
     ...lfsEnv,
-    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
   attachGitStreamLogger(inner);
@@ -216,7 +254,6 @@ async function fetchLfsAssets(targetDir: string): Promise<void> {
   }
 
   const lfsGit = simpleGit(targetDir).env({
-    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
   attachGitStreamLogger(lfsGit);
@@ -284,9 +321,13 @@ async function fetchLfsAssets(targetDir: string): Promise<void> {
 }
 
 async function pullSparse(targetDir: string): Promise<void> {
+  // Ensure the URL rewrites are present in the repo's local config on
+  // every sync — safe against existing clones that predate the env
+  // being set, and idempotent so new env values overwrite stale ones.
+  await persistUrlRewritesInRepo(targetDir);
+
   const lfsEnv = {
     GIT_LFS_SKIP_SMUDGE: '1',
-    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>;
   const inner = simpleGit(targetDir).env(lfsEnv);

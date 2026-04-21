@@ -271,24 +271,17 @@ export function getGitUrlRewriteFlags(): string[] {
 }
 
 /**
- * Return env-var overlay that applies the same URL rewrites to EVERY
- * git subprocess (including ones we don't wrap with `-c`, like the
- * smudge filter git-lfs runs internally). Uses `GIT_CONFIG_COUNT` /
- * `GIT_CONFIG_KEY_N` / `GIT_CONFIG_VALUE_N` — git's native mechanism
- * for injecting config without quoting hazards. Callers merge this
- * into their simpleGit `.env({...})` call.
+ * Return the URL-rewrite pairs as plain data. Used by `gitSync.ts` to
+ * persist them into the local repo's `.git/config` via
+ * `git config --local url.<to>.insteadOf <from>` — once written, EVERY
+ * subsequent git/LFS invocation on that repo inherits the rewrites
+ * without us having to shuttle them through env vars (modern git/
+ * simple-git block `GIT_CONFIG_COUNT` as "unsafe") or `-c` flags on
+ * every single call (they don't propagate into git-lfs's smudge
+ * subprocesses reliably).
  */
-export function getGitConfigEnv(): Record<string, string> {
-  const rewrites = parseGitUrlRewrites();
-  if (rewrites.length === 0) return {};
-  const env: Record<string, string> = {
-    GIT_CONFIG_COUNT: String(rewrites.length),
-  };
-  rewrites.forEach(({ from, to }, i) => {
-    env[`GIT_CONFIG_KEY_${i}`] = `url.${to}.insteadOf`;
-    env[`GIT_CONFIG_VALUE_${i}`] = from;
-  });
-  return env;
+export function getGitUrlRewrites(): Array<{ from: string; to: string }> {
+  return parseGitUrlRewrites();
 }
 
 /**
