@@ -11,7 +11,34 @@
  * That means fast restarts on platforms whose runtime disk survives
  * between deploys, and a full ~10-30 minute first-run on cold ones.
  *
+ * ---------------------------------------------------------------------
+ * Critical design detail: the PORT is bound EARLY.
+ *
+ * Every managed host we've encountered has a startup health check on
+ * the port it injected via `PORT` / `LEVEL_VIEWER_PORT`. Ours times
+ * out after ~30-60 seconds and kills the process. The bake alone is
+ * many minutes, and on a truly cold host we also have install +
+ * build in front of it. Letting the port sit unbound during any of
+ * those steps guarantees the supervisor kills us before we ever get
+ * to `node server/dist/index.js`.
+ *
+ * The fix: bind a tiny Node http server to the target port as the
+ * FIRST thing this script does (before install/build/bake), and
+ * serve a JSON status payload that describes the current phase. It
+ * passes health checks because it's a live TCP listener returning
+ * 200. When all prep work finishes we close it and hand the port
+ * off to the real server process.
+ *
+ * Port handoff is the one fiddly bit: on some OSes the port is held
+ * in TIME_WAIT briefly after close, so the child can get EADDRINUSE.
+ * We mitigate by (a) calling `setTimeout(..., 0)` after close to let
+ * the OS release, and (b) having the real server retry its listen()
+ * call (handled inside `server/src/index.ts`).
+ * ---------------------------------------------------------------------
+ *
  * Steps (in order, each conditional):
+ *   0. Bind port to a placeholder HTTP server so health checks pass
+ *      from T+0 regardless of how long the rest of the boot takes.
  *   1. `npm ci --include=dev`  when root `node_modules/` is missing.
  *      `--include=dev` because Vite + tsx + typescript are listed as
  *      devDependencies; the bake step needs them even under
@@ -21,12 +48,7 @@
  *      missing.
  *   4. `npm run bake --workspace=server`  when `data/bundle/
  *      manifest.json` is missing AND GitLab creds are configured.
- *      No creds → skip the bake and fall back to live mode, which
- *      surfaces the misconfiguration via the server's own startup
- *      logs rather than crashing here. This matches the design
- *      intent that the runtime env var `GITLAB_REPO2_URL` is
- *      optional in bundle mode.
- *   5. Launch `server/dist/index.js`.
+ *   5. Close placeholder; launch `server/dist/index.js`.
  *
  * Anything but step 5 failing is fatal — we exit with the child's
  * status code so the platform's process supervisor sees the
@@ -34,14 +56,24 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 
 const USE_SHELL = process.platform === 'win32';
+
+// Port resolution mirrors the server's own config.ts rules so the
+// placeholder binds wherever the real server will want to bind.
+// LEVEL_VIEWER_PORT wins because a local dev might want to override
+// a platform-injected PORT; fallback 3101 for bare local runs.
+const PORT = Number(process.env.LEVEL_VIEWER_PORT || process.env.PORT || '3101');
+
+let currentPhase = 'initializing';
+let currentDetail = '';
 
 function log(msg) {
   console.log(`[aegisgram-start] ${msg}`);
@@ -51,16 +83,102 @@ function warn(msg) {
   console.warn(`[aegisgram-start] ${msg}`);
 }
 
+function setPhase(phase, detail = '') {
+  currentPhase = phase;
+  currentDetail = detail;
+  log(`phase: ${phase}${detail ? ` — ${detail}` : ''}`);
+}
+
+// ---------------------------------------------------------------------
+// Placeholder HTTP server — keeps the port responsive during bake.
+//
+// Everything here is written with zero external deps so it can run
+// before `npm ci` completes. It answers ANY request with a 200 JSON
+// payload describing the current phase. That payload doubles as a
+// useful tool for operators: `curl $HOST/` shows exactly where a
+// slow deploy is stuck.
+// ---------------------------------------------------------------------
+let placeholderServer = null;
+
+function startPlaceholder() {
+  placeholderServer = http.createServer((req, res) => {
+    const body = JSON.stringify({
+      status: 'starting',
+      phase: currentPhase,
+      detail: currentDetail,
+      message:
+        'Aegisgram is warming up (install/build/bake). First boot on a ' +
+        'cold host can take 10-30 minutes. This placeholder will be ' +
+        'replaced by the real server automatically.',
+      port: PORT,
+      // Include the request path so a platform's health check against
+      // a specific endpoint sees a predictable response shape.
+      path: req.url,
+    });
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(body);
+  });
+
+  placeholderServer.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      // Something else is on the port already. Probably fine — this
+      // means a previous deploy is still running. The platform
+      // supervisor will route to whichever process is live. We just
+      // won't have the placeholder. Log and carry on.
+      warn(`placeholder could not bind port ${PORT} (EADDRINUSE). Assuming a previous instance holds it; continuing without placeholder.`);
+      placeholderServer = null;
+      return;
+    }
+    warn(`placeholder server error: ${err && err.message ? err.message : err}`);
+  });
+
+  return new Promise((resolve) => {
+    try {
+      placeholderServer.listen(PORT, () => {
+        log(`placeholder HTTP server listening on port ${PORT} (health checks pass while we warm up)`);
+        resolve();
+      });
+    } catch (err) {
+      warn(`placeholder .listen() threw: ${err && err.message ? err.message : err}`);
+      placeholderServer = null;
+      resolve();
+    }
+  });
+}
+
+function stopPlaceholder() {
+  return new Promise((resolve) => {
+    if (!placeholderServer) {
+      resolve();
+      return;
+    }
+    log('closing placeholder server...');
+    const srv = placeholderServer;
+    placeholderServer = null;
+    // `close()` only stops accepting new connections; existing ones
+    // would keep the port held. Our placeholder replies immediately
+    // and closes each request, so there should be nothing in-flight,
+    // but we call `closeAllConnections` to be sure (Node 18.2+). On
+    // older runtimes the property is undefined and we skip it.
+    try {
+      if (typeof srv.closeAllConnections === 'function') srv.closeAllConnections();
+    } catch {
+      /* noop */
+    }
+    srv.close(() => {
+      // Give the OS a tick to release the port for the real server.
+      setTimeout(resolve, 250);
+    });
+  });
+}
+
 function run(cmd, args) {
   log(`$ ${cmd} ${args.join(' ')}`);
   const res = spawnSync(cmd, args, {
     stdio: 'inherit',
     cwd: ROOT,
-    // Windows `npm` is `npm.cmd`; child_process requires shell=true
-    // to resolve shim scripts. Linux/macOS run the real npm binary
-    // directly, but shell=true is harmless there too — we prefer
-    // the branch over `shell: true` unconditionally to keep the
-    // process tree shallow on Unix-likes.
     shell: USE_SHELL,
     env: process.env,
   });
@@ -84,117 +202,99 @@ function exists(rel) {
 }
 
 // ---------------------------------------------------------------------
-// 1. Install dependencies if the tree is bare.
+// Main — async so we can await the placeholder listen/close.
 // ---------------------------------------------------------------------
-// Root `node_modules/` is the single reliable marker — `npm ci` at
-// the root hoists workspaces so per-workspace `node_modules/` may or
-// may not exist depending on version/resolver. We also probe for a
-// hoisted package we know the server needs (`express`) in case the
-// root dir exists but is a stale remnant.
-const hasNodeModules = exists('node_modules') && exists('node_modules/express');
-if (!hasNodeModules) {
-  log('installing dependencies (fresh clone detected)...');
-  // Prefer `npm ci` when a lockfile exists — deterministic, fast.
-  // Fall back to `npm install` if the lockfile is missing (e.g. the
-  // deploy host stripped it) so we don't brick the deploy on a
-  // configuration quirk.
-  if (exists('package-lock.json')) {
-    run('npm', ['ci', '--include=dev']);
+async function main() {
+  // Step 0: bind placeholder BEFORE any slow work. Critical for
+  // hosts with strict startup health checks.
+  setPhase('binding-port');
+  await startPlaceholder();
+
+  // Step 1: install deps if the tree is bare.
+  const hasNodeModules = exists('node_modules') && exists('node_modules/express');
+  if (!hasNodeModules) {
+    setPhase('installing-deps', 'npm ci --include=dev');
+    if (exists('package-lock.json')) {
+      run('npm', ['ci', '--include=dev']);
+    } else {
+      run('npm', ['install', '--include=dev']);
+    }
   } else {
-    run('npm', ['install', '--include=dev']);
+    log('dependencies already installed');
   }
-} else {
-  log('dependencies already installed');
-}
 
-// ---------------------------------------------------------------------
-// 2. Build the web client if dist is missing.
-// ---------------------------------------------------------------------
-if (!exists('web/dist/index.html')) {
-  log('building web client...');
-  run('npm', ['run', 'build', '--workspace=web']);
-} else {
-  log('web/dist already built');
-}
-
-// ---------------------------------------------------------------------
-// 3. Build the server (TypeScript → JS).
-// ---------------------------------------------------------------------
-if (!exists('server/dist/index.js')) {
-  log('building server...');
-  run('npm', ['run', 'build', '--workspace=server']);
-} else {
-  log('server/dist already built');
-}
-
-// ---------------------------------------------------------------------
-// 4. Bake the content bundle if one doesn't exist.
-//
-// Skipping the bake is a legitimate configuration: a host that has a
-// committed bundle (`git lfs pull`-based deploys) never needs to bake,
-// and a dev host with no GitLab creds deliberately wants the bundle
-// to be absent so the server runs in live mode against a local Unity
-// clone. We only bake when both conditions hold — no bundle AND we
-// have something to bake from.
-// ---------------------------------------------------------------------
-if (!exists('data/bundle/manifest.json')) {
-  if (process.env.GITLAB_REPO2_URL) {
-    log('no content bundle found — baking from GITLAB_REPO2_URL...');
-    // Force full-LFS mode for the child bake process. This MUST be
-    // set here on the parent env (inherited by the spawn) rather
-    // than inside bake-bundle.ts, because ESM imports hoist ahead
-    // of top-level statements — by the time the bake script's
-    // inline `process.env.LEVEL_VIEWER_GIT_FETCH_LFS = 'true'`
-    // runs, `config.ts` has already been evaluated and captured
-    // the old (false) value. Setting it here means `config.ts`
-    // sees 'true' on its first and only read.
-    process.env.LEVEL_VIEWER_GIT_FETCH_LFS = 'true';
-    run('npm', ['run', 'bake', '--workspace=server']);
+  // Step 2: build web.
+  if (!exists('web/dist/index.html')) {
+    setPhase('building-web');
+    run('npm', ['run', 'build', '--workspace=web']);
   } else {
-    warn('no data/bundle/manifest.json and no GITLAB_REPO2_URL set.');
-    warn('starting in live mode — scenes will fail to load unless the');
-    warn('server can reach Project Aegis on its own.');
+    log('web/dist already built');
   }
-} else {
-  log('content bundle present — booting in bundle mode');
+
+  // Step 3: build server.
+  if (!exists('server/dist/index.js')) {
+    setPhase('building-server');
+    run('npm', ['run', 'build', '--workspace=server']);
+  } else {
+    log('server/dist already built');
+  }
+
+  // Step 4: bake content bundle.
+  if (!exists('data/bundle/manifest.json')) {
+    if (process.env.GITLAB_REPO2_URL) {
+      setPhase('baking-bundle', 'cloning + LFS pull + scene export (slow)');
+      // Force full-LFS mode for the child bake process. MUST be set
+      // on the parent env (inherited by spawn) rather than inside
+      // bake-bundle.ts — ESM imports hoist ahead of top-level
+      // statements, so bake's inline assignment runs after config.ts
+      // has already captured the old value.
+      process.env.LEVEL_VIEWER_GIT_FETCH_LFS = 'true';
+      run('npm', ['run', 'bake', '--workspace=server']);
+    } else {
+      warn('no data/bundle/manifest.json and no GITLAB_REPO2_URL set.');
+      warn('starting in live mode — scenes will fail to load unless the');
+      warn('server can reach Project Aegis on its own.');
+    }
+  } else {
+    log('content bundle present — booting in bundle mode');
+  }
+
+  // Step 5: hand off to the real server.
+  setPhase('launching-server');
+  await stopPlaceholder();
+
+  const serverEntry = path.join(ROOT, 'server', 'dist', 'index.js');
+  log(`spawning node ${serverEntry}`);
+  const child = spawn(process.execPath, [serverEntry], {
+    stdio: 'inherit',
+    cwd: ROOT,
+    env: process.env,
+  });
+
+  const forward = (sig) => {
+    if (child.exitCode === null) child.kill(sig);
+  };
+  process.on('SIGTERM', () => forward('SIGTERM'));
+  process.on('SIGINT', () => forward('SIGINT'));
+
+  child.on('exit', (code, signal) => {
+    if (signal) {
+      log(`server exited via signal ${signal}`);
+      process.exit(1);
+    }
+    process.exit(code ?? 0);
+  });
 }
 
-// ---------------------------------------------------------------------
-// 5. Launch the server.
-//
-// We re-exec `node server/dist/index.js` as a child rather than
-// dynamically importing it because:
-//   - A clean process boundary means the server sees a pristine
-//     import cache (important for its own `dotenv` load + module-
-//     level bootstrap).
-//   - If the server exits, we propagate the exit code up to the
-//     platform's supervisor. Dynamic-import would keep the
-//     start.mjs process alive holding whatever state the server
-//     left behind.
-//   - SIGTERM / SIGINT are forwarded naturally through child
-//     processes.
-// ---------------------------------------------------------------------
-log('launching server...');
-const serverEntry = path.join(ROOT, 'server', 'dist', 'index.js');
-const child = spawn(process.execPath, [serverEntry], {
-  stdio: 'inherit',
-  cwd: ROOT,
-  env: process.env,
-});
-
-function forward(sig) {
-  if (child.exitCode === null) child.kill(sig);
-}
-process.on('SIGTERM', () => forward('SIGTERM'));
-process.on('SIGINT', () => forward('SIGINT'));
-
-child.on('exit', (code, signal) => {
-  if (signal) {
-    log(`server exited via signal ${signal}`);
-    process.exit(1);
+// Top-level crash handler: any unexpected throw above should still
+// release the port so a platform supervisor restart isn't stuck on
+// a zombie listener.
+main().catch(async (err) => {
+  console.error(`[aegisgram-start] fatal: ${err && err.stack ? err.stack : err}`);
+  try {
+    await stopPlaceholder();
+  } catch {
+    /* noop */
   }
-  process.exit(code ?? 0);
+  process.exit(1);
 });
-
-// Silence unused-warning (reserved for future dynamic-import fallback).
-void pathToFileURL;

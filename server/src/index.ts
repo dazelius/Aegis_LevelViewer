@@ -76,12 +76,40 @@ async function bootstrap(): Promise<void> {
   // HTTP + WS listeners.
   const httpServer = http.createServer(app);
   attachMultiplayerHub(httpServer);
-  httpServer.listen(config.port, () => {
-    console.log(
-      `[server] listening on http://localhost:${config.port} ` +
-        `(${bundleMode ? 'bundle' : 'live'} mode)`,
-    );
-  });
+
+  // Retry the bind briefly on EADDRINUSE: when this process is
+  // launched via `scripts/start.mjs`, the parent has just closed a
+  // placeholder HTTP server on the same port. Most OSes release the
+  // port immediately, but TIME_WAIT or a lingering accept socket can
+  // delay it by a few hundred ms — particularly on Windows under
+  // platform supervisors. We retry with backoff up to ~3s before
+  // giving up. Any non-EADDRINUSE error propagates as `error`
+  // through the standard listener.
+  const MAX_LISTEN_RETRIES = 10;
+  let listenAttempts = 0;
+  const tryListen = (): void => {
+    httpServer.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE' && listenAttempts < MAX_LISTEN_RETRIES) {
+        listenAttempts += 1;
+        const delayMs = Math.min(1500, 100 * 2 ** (listenAttempts - 1));
+        console.log(
+          `[server] port ${config.port} busy (attempt ${listenAttempts}/${MAX_LISTEN_RETRIES}); ` +
+            `retrying in ${delayMs}ms`,
+        );
+        setTimeout(tryListen, delayMs);
+        return;
+      }
+      console.error(`[server] listen failed: ${err.message}`);
+      process.exit(1);
+    });
+    httpServer.listen(config.port, () => {
+      console.log(
+        `[server] listening on http://localhost:${config.port} ` +
+          `(${bundleMode ? 'bundle' : 'live'} mode)`,
+      );
+    });
+  };
+  tryListen();
 
   // Background bootstrap: either load the pre-baked bundle (deploy
   // target, fast and offline) or sync + index Project Aegis (local
