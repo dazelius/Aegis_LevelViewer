@@ -202,6 +202,24 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
     if (isLfsPointerBuf(head)) {
       console.log(`[lazyLfs] scene file is a pointer — fetching ${relPath} before parse`);
       await ensureLfsFile(absPath, repoDir);
+      // Re-check AFTER the fetch. If still a pointer, the LFS server
+      // never delivered the blob (auth / network / missing upstream).
+      // Return an actionable error instead of parsing zero GameObjects
+      // and painting a black screen.
+      const headAfter = await fs.readFile(absPath).catch(() => null);
+      if (headAfter && isLfsPointerBuf(headAfter)) {
+        console.warn(
+          `[lazyLfs] scene still a pointer after fetch — LFS unavailable for ${relPath}`,
+        );
+        res.status(503).json({
+          error: 'scene content not available',
+          detail:
+            'This scene is stored in Git LFS and the server could not download it from the LFS endpoint. ' +
+            'Check the platform logs for `[lazyLfs] batch failed` and `git lfs env` output to diagnose.',
+          relPath,
+        });
+        return;
+      }
     }
   } catch {
     // Non-fatal — parseScene below will surface a clearer error.

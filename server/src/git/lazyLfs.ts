@@ -92,6 +92,33 @@ const inFlight = new Map<string, Promise<void>>();
 /** Per-repo sequential lock — one `git lfs fetch` at a time. */
 let repoChain: Promise<void> = Promise.resolve();
 
+/** Has `git lfs env` diagnostic already been emitted? First failure is
+ *  usually all we need to diagnose endpoint/auth issues. */
+let lfsEnvReported = false;
+
+async function reportLfsEnvOnce(repoDir: string): Promise<void> {
+  if (lfsEnvReported) return;
+  lfsEnvReported = true;
+  try {
+    const git = simpleGit(repoDir).env({
+      GIT_TERMINAL_PROMPT: '0',
+    } as Record<string, string>);
+    const out = await git.raw(['lfs', 'env']);
+    const scrubbed = String(out)
+      // Strip any oauth2:<token>@ that leaked through so we don't
+      // dump credentials to platform log stores.
+      .replace(/(oauth2|x-access-token|git):([^@\s]+)@/g, '$1:***@');
+    console.log('[lazyLfs] === git lfs env (one-time diagnostic) ===');
+    for (const line of scrubbed.split('\n')) {
+      if (line.trim().length > 0) console.log(`[lazyLfs]   ${line}`);
+    }
+    console.log('[lazyLfs] === end git lfs env ===');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[lazyLfs] git lfs env diagnostic failed: ${msg}`);
+  }
+}
+
 function scheduleInRepo(task: () => Promise<void>): Promise<void> {
   const next = repoChain.then(task, task); // always advance the chain
   repoChain = next.then(
@@ -123,6 +150,9 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
     const include = batch.join(',');
     try {
       console.log(`[lazyLfs] fetching ${batch.length} file(s) from LFS…`);
+      if (batch.length <= 5) {
+        for (const p of batch) console.log(`[lazyLfs]   - ${p}`);
+      }
       await git.raw(['-c', 'lfs.skipdownloaderrors=true', 'lfs', 'fetch', '--include', include]);
       // Smudge pass: materialise cached objects into the working tree.
       // `git lfs checkout` (no file args) smudges every pointer whose
@@ -130,9 +160,31 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       // fetch batch even if some blobs were missing upstream.
       await git.raw(['lfs', 'checkout']);
       console.log(`[lazyLfs] smudged ${batch.length} file(s)`);
+      // Verify: if the first path in the batch is STILL a pointer after
+      // smudge, something went wrong upstream — surface that clearly so
+      // we don't silently serve empty scene data.
+      if (batch.length > 0) {
+        const firstAbs = absFilePaths[i];
+        if (firstAbs && fsSync.existsSync(firstAbs) && isLfsPointerSync(firstAbs)) {
+          console.warn(
+            `[lazyLfs] post-smudge check: ${batch[0]} is STILL an LFS ` +
+              `pointer — LFS server likely rejected the batch request ` +
+              `(auth/network). Check \`git lfs env\` on this host.`,
+          );
+        }
+      }
     } catch (err) {
-      const msg = err instanceof Error ? err.message.split('\n')[0].slice(0, 200) : String(err);
-      console.warn(`[lazyLfs] batch failed (non-fatal): ${msg}`);
+      // Full multi-line error dump — the first line is usually git-lfs's
+      // "Fetching reference refs/heads/..." progress noise, and the real
+      // cause (auth failure, endpoint unreachable, pointer missing) is
+      // on a later line. Log everything so the platform operator can
+      // see what git-lfs actually complained about.
+      const full = err instanceof Error ? (err.message || String(err)) : String(err);
+      const trimmed = full.length > 2000 ? `${full.slice(0, 2000)}\n…(truncated)` : full;
+      console.warn(`[lazyLfs] batch failed (non-fatal):\n${trimmed}`);
+      // Best-effort: dump LFS env once so we can see the endpoint and
+      // auth mode the platform is using. Async but we don't await it.
+      reportLfsEnvOnce(repoDir).catch(() => {});
     }
   }
 }
