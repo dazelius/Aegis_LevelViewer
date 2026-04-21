@@ -256,19 +256,19 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
   // click" work, and the scene JSON arrives in one response.
   //
   // Budget: we need to fit scene-fetch + .mat-pre-fetch + scene-parse
-  // + JSON serialise under the platform's ~30 s proxy kill. Rough
-  // allocation:
-  //     scene LFS fetch      up to 16 s
-  //     .mat/.prefab prefetch up to  6 s   (ensureSceneYamlPointersReady)
+  // + JSON serialise under the platform's ~60 s proxy kill. Rough
+  // allocation (tuned after observing real retries on large scenes):
+  //     scene LFS fetch      up to 45 s   ← bumped from 16 s
+  //     .mat/.prefab prefetch up to  8 s
   //     parseScene + JSON           ~2–4 s
-  //     headroom                    ~4–6 s
-  // If the scene blob exceeds the 16 s window we fall back to the old
-  // 409 contract so the client's retry loop (SceneLoadOverlay) takes
-  // over — the in-flight fetch continues in the background and the
-  // next retry typically joins the same promise and lands in under
-  // another 16 s.
+  //     headroom                    ~3–5 s
+  // The fatter per-request budget collapses the common case (cold
+  // scene on a fast internal endpoint = 20–30 s end to end) into ONE
+  // attempt instead of cycling through 3+ client retries at ~19 s
+  // each. If we do exceed 45 s the 409 fallback still kicks in and
+  // the client joins the same in-flight fetch on its next retry.
   const repoDir = getRepo2LocalDir();
-  const SYNC_WAIT_MS = 16_000;
+  const SYNC_WAIT_MS = 45_000;
   try {
     const head = await fs.readFile(absPath);
     if (isLfsPointerBuf(head)) {
@@ -313,7 +313,7 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
   // that don't make it in time will be re-requested on the client's
   // next scene open once the inFlight promise completes.
   try {
-    await ensureSceneYamlPointersReady(absPath, repoDir, 6_000);
+    await ensureSceneYamlPointersReady(absPath, repoDir, 8_000);
   } catch {
     // Never propagate — missing materials are a cosmetic regression,
     // not a reason to 500 the whole scene request.

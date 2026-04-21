@@ -140,16 +140,11 @@ function SceneLoadOverlay({
   const budgetMs = progress?.totalBudgetMs ?? 75_000;
   const pct = Math.min(100, Math.round((elapsedMs / budgetMs) * 100));
 
-  // Friendly copy. The server's own `hint` (e.g. "LFS fetch in progress
-  // or upstream blob missing — retry shortly") is the most informative
-  // thing we can show, so prefer it once we've seen a 409. Before the
-  // first 409, we pick a message based on elapsed time: the scene
-  // request is currently blocked on the server for up to ~22 s while
-  // it synchronously pulls the scene's LFS blob and its referenced
-  // .mat / .prefab pointers — "Connecting to the server…" during
-  // that window reads as though nothing is happening, so we shift to
-  // a "downloading" phrasing once we've been waiting long enough to
-  // know it's not a fast local hit.
+  // Hint copy depends on how long we've been waiting. Server-provided
+  // hints (from 409 responses) always win once we see one — they
+  // reflect the actual in-flight state. Before the first 409 we pick
+  // an increasingly descriptive message as elapsed grows, because
+  // "Connecting" at 2 minutes reads as broken.
   const headline = error ? 'Failed to load scene' : 'Loading scene…';
   let hint: string;
   if (error) {
@@ -157,14 +152,20 @@ function SceneLoadOverlay({
   } else if (progress?.hint) {
     hint = progress.hint;
   } else if (elapsedMs < 1500) {
-    hint = 'Connecting to the server…';
+    hint = '서버와 연결 중…';
+  } else if (elapsedMs < 20_000) {
+    hint = 'Git LFS에서 씬 파일을 받는 중입니다';
+  } else if (elapsedMs < 60_000) {
+    hint = '대용량 에셋을 받고 있습니다 — 잠시만요';
   } else {
-    // First request is still in flight. Server is blocking for up to
-    // ~16 s on the scene .unity blob then ~6 s on .mat / .prefab
-    // pre-fetch before it will return anything — tell the user that
-    // so they don't think the app is frozen.
-    hint = 'Downloading scene from Git LFS…';
+    hint = '처음 여는 씬은 수 분 걸릴 수 있습니다. 다음엔 즉시 열립니다.';
   }
+
+  // Only surface the retry count once we've been retrying enough that
+  // it matters for diagnosing hung loads (> ~1 min). Showing it
+  // earlier misleads users into thinking it's a download progress
+  // fraction ("7/30 files"), which it is not.
+  const showRetryBadge = Boolean(progress) && elapsedMs > 60_000;
 
   return (
     <div className={`scene-load-overlay${error ? ' is-error' : ''}`}>
@@ -190,10 +191,10 @@ function SceneLoadOverlay({
               />
             </div>
             <div className="scene-load-meta">
-              <span>{elapsedSec}s elapsed</span>
-              {progress && (
-                <span>
-                  attempt {progress.attempt} / {progress.maxAttempts}
+              <span>{elapsedSec}s 경과</span>
+              {showRetryBadge && progress && (
+                <span className="scene-load-retry">
+                  서버 확인 {progress.attempt}회
                 </span>
               )}
             </div>
@@ -202,11 +203,10 @@ function SceneLoadOverlay({
 
         <div className="scene-load-hint">{hint}</div>
 
-        {!error && elapsedMs > 10_000 && (
+        {!error && elapsedMs > 20_000 && (
           <div className="scene-load-detail">
-            First load of a scene can take a while — the server is
-            pulling the scene's binary assets from Git LFS on demand.
-            Subsequent loads of the same scene are near-instant.
+            이 씬의 .unity / 종속 에셋이 아직 로컬에 없어 Git LFS에서
+            받는 중입니다. 같은 씬을 다시 열면 거의 즉시 로드됩니다.
           </div>
         )}
       </div>

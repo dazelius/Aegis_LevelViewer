@@ -301,17 +301,20 @@ export async function fetchScene(
   const encoded = relPath.split('/').map(encodeURIComponent).join('/');
   const url = apiUrl(`/api/levels/${encoded}`);
 
-  // Retry on 409 `lfs-pointer`. The server returns 409 immediately when
-  // the scene `.unity` is still a Git LFS pointer and a background fetch
-  // is in flight; polling gives it time to land on disk without blowing
-  // the platform's reverse-proxy timeout (~30 s) that would otherwise
-  // surface as a 502 to the user. Budget is generous (~75 s total) so
-  // the very first request after a cold deploy — which may need to
-  // wait for a fresh LFS download AND for the repo-level URL-rewrite
-  // config to get applied — still has a chance to finish on the
-  // user's first click instead of bouncing them to an error page.
-  const MAX_ATTEMPTS = 30;
-  const RETRY_DELAY_MS = 2500;
+  // Retry on 409 `lfs-pointer`. The server holds the request for up
+  // to ~45 s while it pulls the scene's LFS blob synchronously; if it
+  // still isn't on disk it returns a 409 and we retry — each attempt
+  // typically lands within another cycle because the underlying
+  // git-lfs fetch is still running in the background and subsequent
+  // attempts just join the in-flight promise.
+  //
+  // Budget tuning: 12 attempts × ~50 s (45 s server wait + 5 s
+  // inter-attempt sleep) ≈ 10 min of total patience. That covers
+  // pathological cold loads (huge scene on cold cache + concurrent
+  // sync holding the repo lock) while keeping each cycle long enough
+  // that retries are rare — typical cold load finishes on attempt 1.
+  const MAX_ATTEMPTS = 12;
+  const RETRY_DELAY_MS = 5_000;
   const TOTAL_BUDGET_MS = MAX_ATTEMPTS * RETRY_DELAY_MS;
   const startedAt = Date.now();
   let lastHint: string | undefined;

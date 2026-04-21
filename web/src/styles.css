@@ -517,6 +517,12 @@ body.play-mode .app-header { display: none; }
   transition: width 250ms ease-out;
 }
 
+.scene-load-retry {
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
 .scene-load-meta {
   display: flex;
   justify-content: space-between;
