@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
-import type { MaterialJson } from './api';
+import { apiUrl, type MaterialJson } from './api';
 import { buildMaterial } from './sceneToR3F';
 
 /**
@@ -137,7 +137,7 @@ const fbxLoader = new FBXLoader();
  * an actionable error instead of producing a silent empty scene.
  */
 async function fetchFbxGroup(guid: string): Promise<THREE.Group> {
-  const url = `/api/assets/mesh?guid=${encodeURIComponent(guid)}`;
+  const url = apiUrl(`/api/assets/mesh?guid=${encodeURIComponent(guid)}`);
   const res = await fetch(url);
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -170,7 +170,7 @@ async function fetchCharacterMaterials(
 ): Promise<Record<string, MaterialJson>> {
   try {
     const res = await fetch(
-      `/api/assets/fbx-character-materials?guid=${encodeURIComponent(guid)}`,
+      apiUrl(`/api/assets/fbx-character-materials?guid=${encodeURIComponent(guid)}`),
     );
     if (!res.ok) return {};
     const body = (await res.json()) as { materials?: Record<string, MaterialJson> };

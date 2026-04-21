@@ -1,0 +1,4078 @@
+{
+  "version": 1,
+  "bakedAt": "2026-04-21T04:39:36.689Z",
+  "gitHead": "943554c46",
+  "scenes": [
+    {
+      "name": "SalarDeUyun_Result",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/SalarDeUyun_Result.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "SalarDeUyun",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/SalarDeUyun.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "RefBuildings_2",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/RefBuildings_2.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "RefBuildings",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/RefBuildings.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "ENV_Ref_Scene_Deform",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/ENV_Ref_Scene_Deform.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "ENV_Ref_Scene",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/ENV_Ref_Scene.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "Factory_Test_A",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/Factory_Test_A.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "Factory_Test_B",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/Factory_Test_B.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "Factory_Test_C",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/Factory_Test_C.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "M1_Level_1st",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/M1_Level_1st.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "M1_Level_2nd_minimap",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/M1_Level_2nd_minimap.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "M1_Level_2nd",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/M1_Level_2nd.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "M1_OldTown_B_minimap 1",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/M1_OldTown_B_minimap 1.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "RnD_Ice",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "Level_Arctic_LevelTest",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Level_Arctic_LevelTest.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "Level_Arctic_TerrainTest_02",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Level_Arctic_TerrainTest_02.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "Level_Arctic_TerrainTest_Lab",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Level_Arctic_TerrainTest_Lab.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "Level_Arctic_TerrainTest",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Level_Arctic_TerrainTest.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "Level_Arctic",
+      "relPath": "DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Level_Arctic.unity",
+      "category": "dev-only"
+    },
+    {
+      "name": "DesertMine",
+      "relPath": "GameContents/Map/DesertMine/DesertMine.unity",
+      "category": "production"
+    },
+    {
+      "name": "Arctic",
+      "relPath": "GameContents/Map/Mirama_01/Arctic.unity",
+      "category": "production"
+    },
+    {
+      "name": "Factory_New_B",
+      "relPath": "GameContents/Map/Mirama_01/Factory_New_B.unity",
+      "category": "production"
+    },
+    {
+      "name": "Lab",
+      "relPath": "GameContents/Map/Mirama_01/Lab.unity",
+      "category": "production"
+    },
+    {
+      "name": "Test_0323",
+      "relPath": "GameContents/Map/Mirama_01/Test_0323.unity",
+      "category": "production"
+    },
+    {
+      "name": "Test_0401",
+      "relPath": "GameContents/Map/Mirama_01/Test_0401.unity",
+      "category": "production"
+    },
+    {
+      "name": "Undercore",
+      "relPath": "GameContents/Map/Mirama_01/Undercore.unity",
+      "category": "production"
+    },
+    {
+      "name": "OldTown",
+      "relPath": "GameContents/Map/OldTown_01/OldTown.unity",
+      "category": "production"
+    }
+  ],
+  "guidToBlob": {
+    "38168b4aafbd7ae4c8be9ae56a531bad": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryLine_A_D.tga",
+      "contentType": "image/png"
+    },
+    "8deac68ca40992941a38f866e444b9e6": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Meshes/F_Sample.fbx",
+      "contentType": "model/fbx"
+    },
+    "b6fb1904a74fce642b3c127a74dbe963": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryCon_A_D.tga",
+      "contentType": "image/png"
+    },
+    "5e61a2aae67680b4caf061446ce685ca": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryWall_A_D.tga",
+      "contentType": "image/png"
+    },
+    "ad3a8c80bcabff542ab03aa18ea60a04": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryCylinder_A_D.tga",
+      "contentType": "image/png"
+    },
+    "676ab493428b48741b61dfa39a54ec04": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryBottom_A_D.tga",
+      "contentType": "image/png"
+    },
+    "c67e3227df4d32c4c9cad2496ffbadd6": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryRoom_A_D.tga",
+      "contentType": "image/png"
+    },
+    "d8869b33e1b8f004488eb4383afaa945": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryIronTile_A_D.tga",
+      "contentType": "image/png"
+    },
+    "6e387f202ac3b0949825f1b2e58c5e1c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryOBJ_B_D.tga",
+      "contentType": "image/png"
+    },
+    "491363426f14e274c8eab145318cb812": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactoryOBJ_A_D.tga",
+      "contentType": "image/png"
+    },
+    "df27ced71203a0540a44bcb5799b656c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wood_02.png",
+      "contentType": "image/png"
+    },
+    "681364ace52a0974d954faa45d1746b7": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Grid_Floor_10_number.png",
+      "contentType": "image/png"
+    },
+    "d1118dda59970a2449ee890fa247c4c5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Grid Material/Grid_01_BaseMap.png",
+      "contentType": "image/png"
+    },
+    "c5c221ed57a3bf6488f8eba0db28a004": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Grid Material/Grid_01_Normal.png",
+      "contentType": "image/png"
+    },
+    "d9c0dd5cdac07b145be73329e489869a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Grid Material/Grid_02_BaseMap.png",
+      "contentType": "image/png"
+    },
+    "82ae9b04e417e2d4aa1249c7f988bf9f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/box_02.png",
+      "contentType": "image/png"
+    },
+    "e1128f344606c50459b7b5cfc5b0cc07": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevPrefab/GridFloor/Grid_Floor.tga",
+      "contentType": "image/png"
+    },
+    "02998acc21f95f744bf7a6003ff3a811": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/box_03.png",
+      "contentType": "image/png"
+    },
+    "1a275d01cc6df9449afb3ada868ed319": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/box_04.png",
+      "contentType": "image/png"
+    },
+    "95177b816dd574c4fa0c44ad41e6e142": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_13.png",
+      "contentType": "image/png"
+    },
+    "7ab39537b74910047bb680ed9019c292": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_12.png",
+      "contentType": "image/png"
+    },
+    "486bf10bb24cd0b42923481c29220590": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_10.png",
+      "contentType": "image/png"
+    },
+    "a7b90fe551a21cb46a2cd36707748832": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_14.png",
+      "contentType": "image/png"
+    },
+    "a4f9afd603bb3ea4fa643d268d1e8f2d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_11.png",
+      "contentType": "image/png"
+    },
+    "9646b5f668376854abca9227c5d28cc8": {
+      "ext": ".jpg",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_16.jpg",
+      "contentType": "image/png"
+    },
+    "5253601bc3fc9c740a989471d62f16d5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_15.png",
+      "contentType": "image/png"
+    },
+    "e4676872eefb4b64e837f1edd52ec574": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_18.png",
+      "contentType": "image/png"
+    },
+    "9313e64153fa88441b003497431153d5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/roof_01.png",
+      "contentType": "image/png"
+    },
+    "18f5c88d325c908419d94ce407512990": {
+      "ext": ".jpg",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/floor_17.jpg",
+      "contentType": "image/png"
+    },
+    "a44c9a32feabee741813b035201a145e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/roof_02.png",
+      "contentType": "image/png"
+    },
+    "b90af5122e56fd2439a643fc339b1a2d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_Brown_01.png",
+      "contentType": "image/png"
+    },
+    "ab8db2e1f3feb4e448a9cd7921a6d8fa": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_Green_01.png",
+      "contentType": "image/png"
+    },
+    "238b4f8bf06cf2f4c97f6aa0354fc007": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_Grey_01.png",
+      "contentType": "image/png"
+    },
+    "efbbbf65fea9bde4f9790062a544cb11": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_Blue_01.png",
+      "contentType": "image/png"
+    },
+    "87b0d5c24382cfc4d87e6be3b7c4f6b0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_Orange_01.png",
+      "contentType": "image/png"
+    },
+    "696aadf71fe73c340aa834763037a76d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_Red_01.png",
+      "contentType": "image/png"
+    },
+    "c9c8f44b276ba5141b138ad4f6d53697": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_Purple_01.png",
+      "contentType": "image/png"
+    },
+    "78e877fb8df998f46900a7859784d278": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_Yellow_01.png",
+      "contentType": "image/png"
+    },
+    "f8193514a33a40542b6bddbcefe7d469": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/SimpleColor_White_01.png",
+      "contentType": "image/png"
+    },
+    "7ac5917e01d56de4e8a50d2260ea39d2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_07.png",
+      "contentType": "image/png"
+    },
+    "333b83db019ea9342909513ae8bb0998": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/steal_04.png",
+      "contentType": "image/png"
+    },
+    "d6616d8a2d3cb114ca27ea26d4a45711": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_11.png",
+      "contentType": "image/png"
+    },
+    "4d9c929e3b601214995cce6b7d260e50": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_08.png",
+      "contentType": "image/png"
+    },
+    "b40d8642c34c29141a3758bb50d88122": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_09.png",
+      "contentType": "image/png"
+    },
+    "75420f92d6f149a45ab8ea30b18d65b2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_10.png",
+      "contentType": "image/png"
+    },
+    "ff8e0386237d44d43818154ef143d5ee": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_14.png",
+      "contentType": "image/png"
+    },
+    "2de99c3836e3f274c9ba34e903aa3383": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_12.png",
+      "contentType": "image/png"
+    },
+    "d4a9cba002279764f844d35c8dcad93d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_13.png",
+      "contentType": "image/png"
+    },
+    "fec6dd730e8994f46a877097766358ea": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials_Sharon/wall_15.png",
+      "contentType": "image/png"
+    },
+    "d4beed6b846734145a76897eb2d7c3dc": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/ammo_01.png",
+      "contentType": "image/png"
+    },
+    "777fd584e1d3b5c4fb3c995c7b832aff": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/image001.png",
+      "contentType": "image/png"
+    },
+    "194cf00b46e645c43a184ff421ec2fef": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/cabinet_01.png",
+      "contentType": "image/png"
+    },
+    "ad383409a0505b94aacc3d83daace4ae": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/barrel_01.png",
+      "contentType": "image/png"
+    },
+    "0d4e4b1b1d4dfb047b04c2cf058a9bd9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/cblock_01.png",
+      "contentType": "image/png"
+    },
+    "d4ce5ba4a44216440b9f3f6aabcfb29f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/box_01.png",
+      "contentType": "image/png"
+    },
+    "a9bf8abba6c011d49853e0577b8b5f5e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/cave_01.png",
+      "contentType": "image/png"
+    },
+    "3028be3db1f43e3428a5842538965624": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Cdoor_01.png",
+      "contentType": "image/png"
+    },
+    "39e0e08f1a70ed5488819232c87d233f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Ccloth_01.png",
+      "contentType": "image/png"
+    },
+    "e5fc55c669cf6f24dabe8b45de590e85": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Cfloor_01.png",
+      "contentType": "image/png"
+    },
+    "7fb2109da8652fe45b2c8724fbf91e31": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/cloth_01.png",
+      "contentType": "image/png"
+    },
+    "7eb50137158e9f8409d3809dfbc6457a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/chaindoor_01.png",
+      "contentType": "image/png"
+    },
+    "67ab86e987073a440b92ce00359e8683": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/csopa_01.png",
+      "contentType": "image/png"
+    },
+    "cc1e2cedf023852438461181f0244d6a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/container_01.png",
+      "contentType": "image/png"
+    },
+    "d58e616ecbb7b7443b8fcbe71f19ffed": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/csteel_01.png",
+      "contentType": "image/png"
+    },
+    "a9ab71df65f312d46b3a368991e40560": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/cwood_01.png",
+      "contentType": "image/png"
+    },
+    "e7b1d8d14f5c3c748a8b312ca4f023db": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/csteel_02.png",
+      "contentType": "image/png"
+    },
+    "aa1d761d844972f4887618c544c9d550": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Cwindow_01.png",
+      "contentType": "image/png"
+    },
+    "a6bc01fb68d8c3042aa279bf81e744cb": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Cwall_01.png",
+      "contentType": "image/png"
+    },
+    "c460f28ad08b4d8459c70d2dc95995b1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/door_01.png",
+      "contentType": "image/png"
+    },
+    "a6475bf53b6353945b0a84ab98656eee": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/floor_02.png",
+      "contentType": "image/png"
+    },
+    "44688215da0719f4eaf1c3dfcb6055b3": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/floor_01.png",
+      "contentType": "image/png"
+    },
+    "570d456b6bfa3574e8f49482b3e7f084": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/floor_03.png",
+      "contentType": "image/png"
+    },
+    "1f8c686c1c46a3d4d8cbbf1f27619baa": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/floor_06.png",
+      "contentType": "image/png"
+    },
+    "863300374bd586044af6b5d1b2fed240": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/floor_04.png",
+      "contentType": "image/png"
+    },
+    "cdbaf1c0a348e7a4ebb89bd496828ab3": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/floor_05.png",
+      "contentType": "image/png"
+    },
+    "68beb02e5bbcac74faf3062039d8b269": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wood_01.png",
+      "contentType": "image/png"
+    },
+    "ced97b42b4b8af34e9f45cea986adb0f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/floor_09.png",
+      "contentType": "image/png"
+    },
+    "a430f7e6c39e4f84ca0d8596de85503a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/floor_08.png",
+      "contentType": "image/png"
+    },
+    "b822f64624e5e2d47b59e66a32abc817": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/sandfloor_01.png",
+      "contentType": "image/png"
+    },
+    "cb8d9cb9fc9a88a48b0288caee30ba54": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/santy_wall_02.png",
+      "contentType": "image/png"
+    },
+    "7ec12f6c8827907438943af98e4682ad": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/santy_floor_01.png",
+      "contentType": "image/png"
+    },
+    "1874da4cbd6e270409597ca9182b4c0f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/santy_wall_01.png",
+      "contentType": "image/png"
+    },
+    "1b22a0a657c1a264ba76a8d2a6f6b786": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/steel_01.png",
+      "contentType": "image/png"
+    },
+    "31b7df7eb91b0b9449cc059dba200af9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/steel_03.png",
+      "contentType": "image/png"
+    },
+    "59cdff6f269a8004d8217400af4e90f5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/santy_wall_03.png",
+      "contentType": "image/png"
+    },
+    "3690d6532dd4664409887df7ec6f4225": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/steel_02.png",
+      "contentType": "image/png"
+    },
+    "f3e408d48d615d0479a7c4894b7c3d7e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/stop_01.png",
+      "contentType": "image/png"
+    },
+    "6ac859860b091e043b20216f657e2fe1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/tire_01.png",
+      "contentType": "image/png"
+    },
+    "47fbe82ac2ff8c248b09157e53c24478": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_01.png",
+      "contentType": "image/png"
+    },
+    "3ee5006bc28e50b41a219d2b15fe9330": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/stop_02.png",
+      "contentType": "image/png"
+    },
+    "27e34703ebdc50b49af1687af9550f43": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_02.png",
+      "contentType": "image/png"
+    },
+    "e05e2207b446cb149a9e5f83ff03655e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/santy_steel_01.png",
+      "contentType": "image/png"
+    },
+    "c8b0ba4deab3b3041948222856e5572c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_03.png",
+      "contentType": "image/png"
+    },
+    "3d30ec75e3d63ea4381d41c8d850933d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_06.png",
+      "contentType": "image/png"
+    },
+    "26fd4d5542001f14d80378c7717d3907": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_bluecontainer_01.png",
+      "contentType": "image/png"
+    },
+    "b3f57dc0d563de647ad42aefa74afefd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_block_02.png",
+      "contentType": "image/png"
+    },
+    "f05e25f162320d5429a1b6c9ce538254": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_wood_01.png",
+      "contentType": "image/png"
+    },
+    "041caa06b59154d4b98f3b04af468dd2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_block_03.png",
+      "contentType": "image/png"
+    },
+    "d592c378434097e4a91ab93e9bd91cfc": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/window_01.png",
+      "contentType": "image/png"
+    },
+    "0195dcae7f46fea45b9205e8b3d800bc": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_redcontainer_01.png",
+      "contentType": "image/png"
+    },
+    "582f03e621643364aa9f663866b74624": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/wall_block_01.png",
+      "contentType": "image/png"
+    },
+    "6a1c56a7bf95d1c4aa8cc3914905ee3d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Grid Material/coex.png",
+      "contentType": "image/png"
+    },
+    "d76deae32729eac48a9c6c3db903c299": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/BLG_Coex_Kpopsquare.png",
+      "contentType": "image/png"
+    },
+    "691d48704115c074db690f1dd00d3f9c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/box_00.png",
+      "contentType": "image/png"
+    },
+    "d3a03645db86a474d8dd47aff49f9f6c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/AdvertisingBoard_A.TGA",
+      "contentType": "image/png"
+    },
+    "8e803e66681a6cb4f8623a4ce67ac864": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/AdvertisingBoard_D.TGA",
+      "contentType": "image/png"
+    },
+    "0a84a18146e3fae47af4ad873968bdbd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Cube.png",
+      "contentType": "image/png"
+    },
+    "55eedf60095c2db4bbf148cceac4576a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Pipe_00.png",
+      "contentType": "image/png"
+    },
+    "ec7d0f50f9d428e4d8c0f0688f686861": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Cylinder.png",
+      "contentType": "image/png"
+    },
+    "e6a2b5f6a8bcaaf46b7060d9c3d7073c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Sphere.png",
+      "contentType": "image/png"
+    },
+    "9f99620a077aff843b926ceaa89c262c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/S_Natal_Ground.png",
+      "contentType": "image/png"
+    },
+    "125cf2868baa47c4c88ffc12818a14f4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Tex_aphalt.png",
+      "contentType": "image/png"
+    },
+    "7819a246aa23d6340b5ce9ec4b2f520a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/S_Natal_Stadium.png",
+      "contentType": "image/png"
+    },
+    "b1a38052b81289e4c9d91e08a43cf9c7": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/S_Natal_Stadium_Rough.png",
+      "contentType": "image/png"
+    },
+    "9c5f73f3bb69c4f4bb9a828481e4d36b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_Red_Wall.TGA",
+      "contentType": "image/png"
+    },
+    "8f07aa685ef853e4da246c16d18d2397": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_BumpMaterial.TGA",
+      "contentType": "image/png"
+    },
+    "7bef9bcb1025b1e429292e5330c7aa20": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_Grass.TGA",
+      "contentType": "image/png"
+    },
+    "5fc1e42e318a10c4e97ea44ff61f47b6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/S_Natal_Spectators.png",
+      "contentType": "image/png"
+    },
+    "5be55e804aa7085428a0fa45937976c3": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Street_Floor_D.png",
+      "contentType": "image/png"
+    },
+    "955aaf03b7a08d343b20981878b0aed9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_StoneFloor.png",
+      "contentType": "image/png"
+    },
+    "21c12a5ff8a928d40af2ccf92142d035": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_SideStone.TGA",
+      "contentType": "image/png"
+    },
+    "f573fd54c7cf0a8429849dd592fd5e55": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_RiverSide.png",
+      "contentType": "image/png"
+    },
+    "fdaf8a34016659c448e0f73678cb4406": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_StoneNondirection.TGA",
+      "contentType": "image/png"
+    },
+    "6227542e6c167b5428188d188f65d52f": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_RiverWater.tga",
+      "contentType": "image/png"
+    },
+    "0762906f4d044fc40b8277d1a36f3a3f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Sky_Sunset_04.png",
+      "contentType": "image/png"
+    },
+    "ed9b6887db4717949a45b68f251d3b16": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Module_BrickWall_A.png",
+      "contentType": "image/png"
+    },
+    "1b301ca37097dfc418db0ece89117b8d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/blankTemplate_output_baseColor 1.png",
+      "contentType": "image/png"
+    },
+    "2e852e3eddcd08a4cbc631965f33399e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/D_WallBrick_01_D.png",
+      "contentType": "image/png"
+    },
+    "aeafa79c6d37ba34699975acfc2901f2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Module_BrickWall_1F_A.png",
+      "contentType": "image/png"
+    },
+    "595be193730897444b9e0f874fb4f782": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Test_Wall_Device.png",
+      "contentType": "image/png"
+    },
+    "a2d5cb836e40fb5418ec79b3287b57b0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_A_2F_D.png",
+      "contentType": "image/png"
+    },
+    "0483054e24969824b9ab8e48d1fc3e74": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/TF2_Z_Floor.png",
+      "contentType": "image/png"
+    },
+    "2683aabfe1737884e8ea55c81f5ca2fa": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/YellowBox_00.png",
+      "contentType": "image/png"
+    },
+    "f79da53e2d7fb5c47bc9bd4a02ad5493": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/Bldg_BricWall02_1F.png",
+      "contentType": "image/png"
+    },
+    "7973a26b5bed0c3458448131abbac6ed": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/Bldg_BricWall_2F.png",
+      "contentType": "image/png"
+    },
+    "86868c6fefa907e44a11ee24df2b6fc4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/Bldg_BricWall_1F.png",
+      "contentType": "image/png"
+    },
+    "4cd1cb52a4899be49a6d270a7c4f9c36": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/Bldg_BricWall02_2F.png",
+      "contentType": "image/png"
+    },
+    "ced1e4f8ff0a81e45be2a430afd2625d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/Build_A_Ref.png",
+      "contentType": "image/png"
+    },
+    "aa4ac51ab203abc46bf50a39843c27ef": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Module_BrickWall_B.png",
+      "contentType": "image/png"
+    },
+    "1d26d06d5f392f94fb91f62c3b2aba1d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Module_BrickWall_5m.png",
+      "contentType": "image/png"
+    },
+    "49e0a2af687ff4542a8e22542cb008e5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Module_BrickWall_1F_B.png",
+      "contentType": "image/png"
+    },
+    "57e5cca2ccea5a04083b9b262b20a1f1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/VendingMachine_01.png",
+      "contentType": "image/png"
+    },
+    "94bcafa6ac46aed40a564f888fddbb36": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_striker_lobby_001_b 1.tga",
+      "contentType": "image/png"
+    },
+    "bbe57848ca43fb6479e5e108bf4a8f03": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_striker_lobby_001_n 1.tga",
+      "contentType": "image/png"
+    },
+    "a2970655c113f7d4eb33b50d71100a5e": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/T_Material_001_B.tga",
+      "contentType": "image/png"
+    },
+    "7616b06886e76864a9063ceeaa89cdb1": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/T_Material_001_N.tga",
+      "contentType": "image/png"
+    },
+    "42a8b0ed3e2533a4c870b6bdd3f1752f": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_striker_backpack_b.tga",
+      "contentType": "image/png"
+    },
+    "5f84092cb24090b42836b487369f9514": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_striker_backpack_n.tga",
+      "contentType": "image/png"
+    },
+    "fdf4507e074b05549aa0d596914b2a69": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_vanguard_backpack_b.tga",
+      "contentType": "image/png"
+    },
+    "7ae2f27c3ff42de47a9ffba247a36594": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_vanguard_backpack_n.tga",
+      "contentType": "image/png"
+    },
+    "e0ac9eaf916ef1643b2ede4c3196e040": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_agent_b.tga",
+      "contentType": "image/png"
+    },
+    "1c02f828a72df124d8add7c356ee9732": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_agent_n.tga",
+      "contentType": "image/png"
+    },
+    "9efc6961302af904a9b6c240c62e8408": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_vanguard_weapon_A_b.tga",
+      "contentType": "image/png"
+    },
+    "fde5eda0332ecb84488f0dcf0cd182c2": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_vanguard_weapon_A_n.tga",
+      "contentType": "image/png"
+    },
+    "279d7aa18b9a11b40b68d36f279f666e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_vanghuard_b.png",
+      "contentType": "image/png"
+    },
+    "846090583b7040b479c090c8affb7869": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevRender/AegisBasicLit/Art/Texture/t_vanghuard_n.png",
+      "contentType": "image/png"
+    },
+    "3dd002f2e4059f246b6c53609d3999ba": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/GimmickProps/SupplyBox/Special_SupplyBox/Special_SupplyBox_D.png",
+      "contentType": "image/png"
+    },
+    "fc30d53e4358e9648b5cf0ad7e8ec2fe": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/GimmickProps/SupplyBox/Special_SupplyBox/Special_SupplyBox_Off_D.png",
+      "contentType": "image/png"
+    },
+    "04322d53d09952a4aa8f22159ba3ebcf": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_Bittersweet.png",
+      "contentType": "image/png"
+    },
+    "e301bff51fb47e841b8923f062937269": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_Aqua.png",
+      "contentType": "image/png"
+    },
+    "b9f9e2e55fd38d24fa248786b1826fb4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_DarkGray_1.png",
+      "contentType": "image/png"
+    },
+    "62d4d2bd564630a4bb7bc2e6fdbcb769": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_Charcoal_1.png",
+      "contentType": "image/png"
+    },
+    "8e03bedeceed12d4dac4f8774e31e7ff": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_BlueJeans.png",
+      "contentType": "image/png"
+    },
+    "f1190469e81aea94ba9fc49d8c3e501c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_MediumGray_1.png",
+      "contentType": "image/png"
+    },
+    "8d830d6c0ce70c7448d1ce5b12cc16ee": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_Grass.png",
+      "contentType": "image/png"
+    },
+    "5ebb1f528404a8e46841c4ea710bd54d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_LightGray_1.png",
+      "contentType": "image/png"
+    },
+    "124ee26bbfc71aa48ba823aecd962d27": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_Plum.png",
+      "contentType": "image/png"
+    },
+    "691ad88f06d6e6642bb1c4dd7a032068": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_Ruby.png",
+      "contentType": "image/png"
+    },
+    "a45870b956beda34fbe9b66b74ba4dfe": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/ECM2/Shared Assets/Textures/T_SunFlower.png",
+      "contentType": "image/png"
+    },
+    "9290a68d21ae01c46b661900318676db": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/HelpMePlace/Examples/HMP_Materials/HMP_MaterialPrefabs/HMP_ExamplePrefabMaterialsBrownPalette.png",
+      "contentType": "image/png"
+    },
+    "3f37f55868152b849bef4bd25768aebd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/HelpMePlace/Examples/HMP_Materials/HMP_MaterialPrefabs/HMP_EuropaBaseColor.png",
+      "contentType": "image/png"
+    },
+    "e612d6cd202e5a04b9f40041dba7d683": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/HelpMePlace/Examples/HMP_Materials/HMP_MaterialPrefabs/HMP_ExamplePrefabMaterialsSpaceRedPalette.png",
+      "contentType": "image/png"
+    },
+    "06658b34a34dcb340944c4a8b99610fe": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/HelpMePlace/Examples/HMP_Materials/HMP_MaterialPrefabs/HMP_ExamplePrefabMaterialsGrayPalette.png",
+      "contentType": "image/png"
+    },
+    "5315ffb003181f14991b79c254b891c0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/HelpMePlace/Examples/HMP_Materials/HMP_MaterialPrefabs/HMP_ExamplePrefabMaterialsRedPalette.png",
+      "contentType": "image/png"
+    },
+    "f7cb3bf80f9eec2429456177b478a2ed": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/StoneBeach_Normal.png",
+      "contentType": "image/png"
+    },
+    "30ac1b79f815f6345968d1fe608692a3": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/vertexLM_text.png",
+      "contentType": "image/png"
+    },
+    "a75118087a5b8ea41a9f58ce5debb2d2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/ftlogo.png",
+      "contentType": "image/png"
+    },
+    "99d95ea54afd895459384cec558dc940": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/stainedglass.png",
+      "contentType": "image/png"
+    },
+    "f5a4f568ff21d5249a4eeb6c1b8ac488": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_ceiling_a_diff.png",
+      "contentType": "image/png"
+    },
+    "9f2f3ecb52881e345b7288554e60481f": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_BLDG_Wall_D.psd",
+      "contentType": "image/png"
+    },
+    "1a18427854462ca49bcb4a2d39cde0a7": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Floor_A_D.psd",
+      "contentType": "image/png"
+    },
+    "f5183746a76a76741bfa91fd86b89575": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Cliff_A_D.psd",
+      "contentType": "image/png"
+    },
+    "604b7685b2b236d40a55bf501e977004": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Floor_B_D.psd",
+      "contentType": "image/png"
+    },
+    "e5b10101e626fed4fa064c8213e11560": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Floor_Iron_D.psd",
+      "contentType": "image/png"
+    },
+    "708f7dd928c59914baa860e05853f666": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_MetalTS_B_D.psd",
+      "contentType": "image/png"
+    },
+    "942bd4ef11a1d4f4fbe66d9e038d842d": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_MetalTS_A_D.psd",
+      "contentType": "image/png"
+    },
+    "4ccf4bf71987eaa40886bc2ebc487a14": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Floor_Sand_D.psd",
+      "contentType": "image/png"
+    },
+    "425270063d0eab14380a2259c915e350": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Metal_A_D.psd",
+      "contentType": "image/png"
+    },
+    "4b74cbe43275c524ea0e77d9167b4ac5": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_PropSetA_D.psd",
+      "contentType": "image/png"
+    },
+    "5ccc087cbbe9e8e4eac759fdc6cd0442": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_MetalTS_Set_D.psd",
+      "contentType": "image/png"
+    },
+    "4e7f4f3dcde799648b5b52ee9ac826e7": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Tile_A_D.psd",
+      "contentType": "image/png"
+    },
+    "aae2b1d7aa588d441a5db7c2493be605": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_UV_A_D.psd",
+      "contentType": "image/png"
+    },
+    "d447fa2e28b1b0d4d9ecadddfcd5eb14": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Wall_A_D.psd",
+      "contentType": "image/png"
+    },
+    "657a8c90706937f42b59a060a9ef4cd7": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Concrette_Snow_D_02.png",
+      "contentType": "image/png"
+    },
+    "cbe6a408084e6ff43a54fc91abab667f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Concrete_D.png",
+      "contentType": "image/png"
+    },
+    "fb8e84ed9272bd04caff312b45694b74": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Bridge_D.png",
+      "contentType": "image/png"
+    },
+    "22239bca15e199842acf480f1aaadc03": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Concrette_Snow_D.png",
+      "contentType": "image/png"
+    },
+    "f696c6c6ab9e8be4e94a98793995bc03": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Door_01_D.tga",
+      "contentType": "image/png"
+    },
+    "4f9726cbee9db3d4aab4ac6b0af0e487": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Concrette_Snow_B_D.png",
+      "contentType": "image/png"
+    },
+    "4be743030bff4254eb4486ba512ba345": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_DevicePannel_D.png",
+      "contentType": "image/png"
+    },
+    "ce40d686b0f89d049807c3df3b1286a7": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_GateFrame_D.png",
+      "contentType": "image/png"
+    },
+    "a8091c2988cd62944bc403bf42d8dacf": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Concrete_B_D.png",
+      "contentType": "image/png"
+    },
+    "d1d357f134e8eb949858e27417085c44": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_GateWall_D.png",
+      "contentType": "image/png"
+    },
+    "e97ca7f956f89d94fa97b5ac99607358": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_IndoorWall_02_D.tga",
+      "contentType": "image/png"
+    },
+    "2b7697723143cc24ca82691aff196d92": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Indoor_WallPannel_D.png",
+      "contentType": "image/png"
+    },
+    "ed89e266ed058344fabe057ffb8988d7": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_IndoorFloor_01_D.tga",
+      "contentType": "image/png"
+    },
+    "0dfe482be7d5bbf45a9223135aff2855": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_OutsideWall_01_D.png",
+      "contentType": "image/png"
+    },
+    "120efdd5294f0454c84687862cc7d686": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_OutDoorFloor_01_D.png",
+      "contentType": "image/png"
+    },
+    "7e7192aeb7c8fa343a6516e86c02ddc4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Pillar_A_D.png",
+      "contentType": "image/png"
+    },
+    "99e4962f5f97b8b4da32b7bdb0b7d14d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Prop_Box_03_D.png",
+      "contentType": "image/png"
+    },
+    "d614d2437565bf448874fac614fe8c41": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Prop_Barrel_D.tga",
+      "contentType": "image/png"
+    },
+    "248f0f00233bcc0439752882ba109fdd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Pillar_Diagonal_A_D.png",
+      "contentType": "image/png"
+    },
+    "dc220a6e8c8dbfa4abf90916704d70c1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_SciFi_Wall_02_D.png",
+      "contentType": "image/png"
+    },
+    "e2e800afe9440eb4b801363119cedbe4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Prop_Container_D.png",
+      "contentType": "image/png"
+    },
+    "758262c03e0d92d4e9b4dcd0500a827f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Radar_Device_D.png",
+      "contentType": "image/png"
+    },
+    "a1b5bf64dfbc05b409fbc3f6491c929b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_SciFi_Wall_03_D.png",
+      "contentType": "image/png"
+    },
+    "677afffa053fe894982153e230e96cb1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Street_Stair_D.png",
+      "contentType": "image/png"
+    },
+    "f700669917695de4b91f9d81c4cc8e90": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Radar_D.png",
+      "contentType": "image/png"
+    },
+    "f52ab89eb8eb6884abe7b0f0c2827d41": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Snow_LayerdMetalFloor_D.png",
+      "contentType": "image/png"
+    },
+    "9c1b93cb99b28b145903f60c9fc1f3a0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_T_Snow_Floor_01_D.png",
+      "contentType": "image/png"
+    },
+    "55f5c96e172c76845885d98b02e2f972": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_T_SnowFloor_03_D.png",
+      "contentType": "image/png"
+    },
+    "c131effc7b63a7044b7192a78a7448de": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_T_Cliff_Ice_02B_D.png",
+      "contentType": "image/png"
+    },
+    "0effcb2e4ea8c98489474a2ee0c21d28": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/OccupiedTerritory/T_OccupiedTerritory_None.tga",
+      "contentType": "image/png"
+    },
+    "9a663e31cbb8aac48877e9122d923bea": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/OccupiedTerritory/T_OccupiedTerritory_On.png",
+      "contentType": "image/png"
+    },
+    "27b99a9955bf2154c805cc8d8f5f1ae1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map14_Material/Paper_Box_02.png",
+      "contentType": "image/png"
+    },
+    "8b9090d882100d74f9b59ea01a055dc8": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map14_Material/Paper_Box.png",
+      "contentType": "image/png"
+    },
+    "2fde1c92d227619469e3abb8644e9e25": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map16_Material/Gemini_Generated_Image_lgxxktlgxxktlgxx.png",
+      "contentType": "image/png"
+    },
+    "17b41f839720da146af9df8b32c13ce4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/crown.png",
+      "contentType": "image/png"
+    },
+    "1dc4b567331587843871ad5a28048ccf": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map13_Material/Net.png",
+      "contentType": "image/png"
+    },
+    "aa782827640196d47abd66ac132de36e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map16_Material/Roof.png",
+      "contentType": "image/png"
+    },
+    "47297453e418502469998e5b31d86429": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Dirt_Floor.png",
+      "contentType": "image/png"
+    },
+    "392864648d5a2174c942a4bbb2f92ce8": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Floor_Tile_02.png",
+      "contentType": "image/png"
+    },
+    "30153398ec356a2419d98e6616cf25d2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Cutting_Wood.png",
+      "contentType": "image/png"
+    },
+    "fb15e4153516d664a97b6d2f055588f3": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Floor_Tile.png",
+      "contentType": "image/png"
+    },
+    "04753acb506a7634e9e43b7e2c947c47": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Folding_Screen.png",
+      "contentType": "image/png"
+    },
+    "76ccd90b4d31a694592548c7ceca8a1b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Folding_Screen_05.png",
+      "contentType": "image/png"
+    },
+    "f6b4a678abcae1d4ca179406cd4b4aea": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Folding_Screen_02.png",
+      "contentType": "image/png"
+    },
+    "f3ff533b25deae54ea932b5c7e34af78": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Door.png",
+      "contentType": "image/png"
+    },
+    "91d8712d0e9ef2e4b8ab589e4c481039": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Folding_Screen_03.png",
+      "contentType": "image/png"
+    },
+    "fae78982304ccb748ac2d8793e821f9e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/light.png",
+      "contentType": "image/png"
+    },
+    "b3cc915a106064f408c496ec379d5bc9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Folding_Screen_04.png",
+      "contentType": "image/png"
+    },
+    "4d842123f2c1bb84baedd465e7778db2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Metal.png",
+      "contentType": "image/png"
+    },
+    "a89950d1a5754774bab52f67d6e197bd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Folding_Screen_06.png",
+      "contentType": "image/png"
+    },
+    "be33b87945af4f54fb3e3dda64f97070": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Korea_Roof_Tile.png",
+      "contentType": "image/png"
+    },
+    "823ec6213cdadb942893a65dbff47d37": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Pink.png",
+      "contentType": "image/png"
+    },
+    "7883c9dd276dd3240aaafb6c5f510dab": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Pot.png",
+      "contentType": "image/png"
+    },
+    "2bfd2d93bee518b40bb73fc6e078b181": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Rice_StraW.png",
+      "contentType": "image/png"
+    },
+    "401073747dd716a4d9cfabeddf1b2c91": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Rock_Road.png",
+      "contentType": "image/png"
+    },
+    "1644f06bfd33eee48b1c4d86786fdf96": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Rock_Road_02.png",
+      "contentType": "image/png"
+    },
+    "5ed047274a5fdc0419cdac4ec9845f8e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Rock_Road_03.png",
+      "contentType": "image/png"
+    },
+    "fc1ff3e0e109dcd4d86549959ecdfbd6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Rock_Road_Thick.png",
+      "contentType": "image/png"
+    },
+    "7cc74aaa4cd7f2e43bf66cd30f4edea0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Rock_02.png",
+      "contentType": "image/png"
+    },
+    "33f4f1b2d3907b14fb19561255ce7de8": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Rock.png",
+      "contentType": "image/png"
+    },
+    "6c51cce84d312c44988e32c5ca0843d5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Sand.png",
+      "contentType": "image/png"
+    },
+    "316559d1cb236a84d8d441f7cdeaca9d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood.png",
+      "contentType": "image/png"
+    },
+    "7f276c43c5bd52449ba3da634d86a5bc": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_02.png",
+      "contentType": "image/png"
+    },
+    "d0921a404dab42c4ba1f6b61c58ba520": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Stone_Wall.png",
+      "contentType": "image/png"
+    },
+    "f669fa51c24be44409f1fe52980388d3": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Window.png",
+      "contentType": "image/png"
+    },
+    "d680cc3616119f74a868f10d1b9a4e7b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_Box.png",
+      "contentType": "image/png"
+    },
+    "81362fad764064b409c17e499444aec6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_Damage.png",
+      "contentType": "image/png"
+    },
+    "75bbaf8f07780b7438fe12aae10180cd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_03.png",
+      "contentType": "image/png"
+    },
+    "9d758aa1a0d5fd8408b9a93b408a71cd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_Pattern.png",
+      "contentType": "image/png"
+    },
+    "a76c755c9d4eb414c843a37a27650b6b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_Fence.png",
+      "contentType": "image/png"
+    },
+    "ce292b61d8107384fba615f6dde6def4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_Wall_02.png",
+      "contentType": "image/png"
+    },
+    "62c194511cffa824291fce3232a5a770": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_Rock.png",
+      "contentType": "image/png"
+    },
+    "1263c72acf9ad9e4baf5da2f0ae1e311": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevScene/Materials/Materials/Map08_Material/Wood_Wall.png",
+      "contentType": "image/png"
+    },
+    "64f13eb4d14d52f45a75c9e741dbbf8e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_magic_line.png",
+      "contentType": "image/png"
+    },
+    "1b2970a114ab1614d99a18ce46d4f458": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_magic_orb.png",
+      "contentType": "image/png"
+    },
+    "75705879164e64a4e9f95cd1700dfe51": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_Spike02.png",
+      "contentType": "image/png"
+    },
+    "7349d688be5f96545a7742b4d8dfac92": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/angel_offline_projectile/texture/angel_offline_projectile.png",
+      "contentType": "image/png"
+    },
+    "58227ac42c4b25a48978e2c65b6edbe4": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/ar_aug/Texture/T_AR_AUG_DA.TGA",
+      "contentType": "image/png"
+    },
+    "8c6a20643f252374198eae312541c262": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/ar_m16a4/texture/T_AR_M16_DA.TGA",
+      "contentType": "image/png"
+    },
+    "7932c0aa4cd2dee48a87461502e7fec2": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/ar_m416/Texture/T_AR_M416_DA.TGA",
+      "contentType": "image/png"
+    },
+    "b51a92bd869c38243a0cf7d2948541c7": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/dmr_slr/texture/T_AR_SLR_MC_Barrel_DA.TGA",
+      "contentType": "image/png"
+    },
+    "a740a81a9bed50d4681fbca1b61d6704": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/gr_m67/Texture/T_TW_M67_Frag_DA.TGA",
+      "contentType": "image/png"
+    },
+    "47a5af1d4533b4c43855397b276794f0": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/dmr_slr/texture/T_DMR_SLR_DA.TGA",
+      "contentType": "image/png"
+    },
+    "68d8f2fb5d8c0f9428f3304fbb6ab529": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/dmr_slr/texture/T_DMR_SLR_Mag_EXQ_DA.TGA",
+      "contentType": "image/png"
+    },
+    "53fb6d69ea83ddf4ea5072f29cae58c0": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_healing_pistol/texture/T_ETC_Flaregun_02_DA.TGA",
+      "contentType": "image/png"
+    },
+    "173866859c086064189d8e6aa2fdf8ee": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_p1911/texture/T_HG_P1911_DA.TGA",
+      "contentType": "image/png"
+    },
+    "2c2dacc5c23f9174cb33d01f463ab10a": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_p1911/texture/T_HG_P1911_Mag_ExQ_DA.TGA",
+      "contentType": "image/png"
+    },
+    "c5749a75850fae64aac796d6f8cf8d07": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_p92/texture/T_HG_P92_DA.TGA",
+      "contentType": "image/png"
+    },
+    "e3e2f8bbfaf69ae4badc8530697b1c37": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/sg_s1897/texture/T_SG_S1897_MC_SlugBulletLoops_DA.TGA",
+      "contentType": "image/png"
+    },
+    "3775505d05187ea4c805bba6ac161c7e": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_p92/texture/T_HG_P92_Mag_ExQ_DA.TGA",
+      "contentType": "image/png"
+    },
+    "910ad4fc66974c847bb5259c91d45d69": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/sg_s1897/texture/T_SG_S1897_DA.TGA",
+      "contentType": "image/png"
+    },
+    "feab39d63f480df498a425feeb35625b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/skill_weapon/texture/T_ETC_RewardFlaregun_DA.TGA",
+      "contentType": "image/png"
+    },
+    "b43297db0106bb841a13fc672607acba": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_deagle/Texture/T_HG_Deagle_DA.TGA",
+      "contentType": "image/png"
+    },
+    "54ffaf3cd9e73124f8d1f416a3b7142d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/synapse_jammer/Texture/synapse_jammer.png",
+      "contentType": "image/png"
+    },
+    "cf666d2d0a83da04495576a055bfa3ec": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/sr_awm/texture/T_SR_AWM_D.TGA",
+      "contentType": "image/png"
+    },
+    "702be96bc3d0cfa429785b4371673751": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/striker_rocket_launcher/texture/missile_D.tga",
+      "contentType": "image/png"
+    },
+    "3baf55f4378444542ab1941cead8c7e3": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/striker_rocket_launcher/texture/T_Scope_10x_DA.TGA",
+      "contentType": "image/png"
+    },
+    "6fe90a99ca6a7694d805f481b6db3ec1": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/smg_ump/texture/T_SMG_UMP45_DA.TGA",
+      "contentType": "image/png"
+    },
+    "d26476beb0f42cc44a351bf69c89da5c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/striker_rocket_launcher/texture/T_AR_M416_DA.TGA",
+      "contentType": "image/png"
+    },
+    "04bae18c19ce78949b39defbc927f024": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/smg_vector/texture/T_SMG_Vector_DA.TGA",
+      "contentType": "image/png"
+    },
+    "d1bdcd1ada3871b4fa5d6012e8e4303b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/lmg_m249/texture/T_LMG_M249_DA.TGA",
+      "contentType": "image/png"
+    },
+    "a0e059836fd2c1444ac03b5a8001689e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/synapse_virusnode/Texture/synapse_virusnode.png",
+      "contentType": "image/png"
+    },
+    "c32a0b1f62ac42e4399935ffff09c099": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Prototyping/Textures/Prototype Black.png",
+      "contentType": "image/png"
+    },
+    "a728074dab499e0498b46729b7258ad9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Prototyping/Textures/Prototype Blue.png",
+      "contentType": "image/png"
+    },
+    "0f1e1f15e08646b4ba6ff67e94523a6c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Prototyping/Textures/Prototype Green.png",
+      "contentType": "image/png"
+    },
+    "c2c83f67e20a2a541961a1e8baa44b41": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/logolight.fbm/ftlogo.psd",
+      "contentType": "image/png"
+    },
+    "d1f1368bdf297c44c9a9021733f63b73": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_MetalTS_Set_E.psd",
+      "contentType": "image/png"
+    },
+    "e9d09985303ae07438ff993f45b40778": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_Tile_Snowbottom_A_D.tga",
+      "contentType": "image/png"
+    },
+    "2beed6217f37ad14fa5bb2a29bdf4bfd": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_Tile_Snowbottom_B_D.tga",
+      "contentType": "image/png"
+    },
+    "047bcac29d5577b45a78cf9ea1d4b564": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_Tile_Snowbottom_C_D.tga",
+      "contentType": "image/png"
+    },
+    "58fcf6fc073e00549aa93e599fba45eb": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_M1_SFSnow_Tile_A.tga",
+      "contentType": "image/png"
+    },
+    "0aa0c0bc7ccefd5469707d48b00801d6": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_M1_SFSnow_Tile_C.tga",
+      "contentType": "image/png"
+    },
+    "09b237be203f92a4d89fe6bc4b48f478": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_Tile_Snowbottom_D_D.tga",
+      "contentType": "image/png"
+    },
+    "9236635f319ab034fa33215e8eaa903a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevPrefab/ExtreamObjectPrefabs/Tree/LowPolyTreePack/Textures/Colorsheet Tree Dry.png",
+      "contentType": "image/png"
+    },
+    "ed297eb21cb5e5e4188600ba2d272554": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevPrefab/ExtreamObjectPrefabs/Tree/LowPolyTreePack/Textures/Colorsheet Tree Cold.png",
+      "contentType": "image/png"
+    },
+    "99897f7919c46fc43969a2a130434315": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevPrefab/ExtreamObjectPrefabs/Tree/LowPolyTreePack/Textures/Colorsheet Tree Fall.png",
+      "contentType": "image/png"
+    },
+    "8ba8b94b5ab0c214fa2810a7df98a1a9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevPrefab/ExtreamObjectPrefabs/Tree/LowPolyTreePack/Textures/Colorsheet Tree Normal.png",
+      "contentType": "image/png"
+    },
+    "99d074a40e59bce44a631bc50154ca83": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Barricade_Grip_D.png",
+      "contentType": "image/png"
+    },
+    "481a3e548f6bc9544840bc56fb51495f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/ElectricTrans_b_D.png",
+      "contentType": "image/png"
+    },
+    "17a4c96dfc8111443b58a68fc058a38f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Bin_D.png",
+      "contentType": "image/png"
+    },
+    "7ab59751b303e064b841b64bc3f70dd1": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Barrel_Tex.tga",
+      "contentType": "image/png"
+    },
+    "e54fd99af0581c64783f97ec6f80b1ae": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/ElectricTrans_D.png",
+      "contentType": "image/png"
+    },
+    "23e678163e253b94aae540daed56aa6a": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Barricade_Tex.tga",
+      "contentType": "image/png"
+    },
+    "190c8312396f24e4191e8aaa44cf2621": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Crate_Tex.tga",
+      "contentType": "image/png"
+    },
+    "a56a414e9e611e443a96c14865def637": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Compressor_Tex.tga",
+      "contentType": "image/png"
+    },
+    "0f94e5747d6626a45803bfa364dcff3f": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Dispenser_Tex.tga",
+      "contentType": "image/png"
+    },
+    "146f2b41a7714ef4db1bc6a1844778ce": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Container_Tex.tga",
+      "contentType": "image/png"
+    },
+    "e4e341c600a827e4884cadd42163cfe5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_GasTank_D.png",
+      "contentType": "image/png"
+    },
+    "cd4caf29676dba348bd88639d33728ce": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Dumpster_Tex.tga",
+      "contentType": "image/png"
+    },
+    "43d4410217e53dc4fb6db25ed99917ec": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Fusebox_b_Tex.tga",
+      "contentType": "image/png"
+    },
+    "8ca5b417c1e44de4db66b03fedc5fa7c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Machinery02_D.png",
+      "contentType": "image/png"
+    },
+    "4dbd69e3cb5f3f242b3e963fe9a84309": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Fusebox_Tex.tga",
+      "contentType": "image/png"
+    },
+    "967448be76e06c546ad75cfb34b57d4e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_SecurityCamera_D.png",
+      "contentType": "image/png"
+    },
+    "72b7e0cb8ffb1e245b95bfe98be49053": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_PipeSet_Tex.tga",
+      "contentType": "image/png"
+    },
+    "589d10acd6431da44bdf1965f56a82c8": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_SignalBox_Tex.tga",
+      "contentType": "image/png"
+    },
+    "bb5b78d7ebc85774c85e1acce29563d5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Machinery01_D.png",
+      "contentType": "image/png"
+    },
+    "bdd93e2d3e377f745bd2a43607fdbec8": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_Ventilator_D.png",
+      "contentType": "image/png"
+    },
+    "a9489754bbcb97648b866e0f22cd5945": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/Env_Prop_WoodBox_D.png",
+      "contentType": "image/png"
+    },
+    "3589d39962e06204488f0b09de6ac6e6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/TF_Poster_Door_D.png",
+      "contentType": "image/png"
+    },
+    "d524dd72d65d6494196a8120d946ed08": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Props/Texture/TF_WallDeco_D.png",
+      "contentType": "image/png"
+    },
+    "15b6caa39ddce064bb518817de9d90ab": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/pc_base/texture/body_female_b.tga",
+      "contentType": "image/png"
+    },
+    "2beb3ef8f74a85e429c4f1a99d03c29a": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/pc_base/texture/body_female_n.tga",
+      "contentType": "image/png"
+    },
+    "ebef00c0569acf74eb19b279de3bb021": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/pc_base/texture/manbody_d.png",
+      "contentType": "image/png"
+    },
+    "17709521426d2794494d73beab59147a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/pc_base/texture/manbody_n.png",
+      "contentType": "image/png"
+    },
+    "9cfba2acf7bc14c4fb75bc38bb3653fa": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Characters/Pilot/Textures/Pilot Body.tga",
+      "contentType": "image/png"
+    },
+    "f3b386badeef14a709e222aad4fa09c6": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Characters/Viking/Textures/Viking.TGA",
+      "contentType": "image/png"
+    },
+    "91fdea31dc5679b418f4489b2b4b2a1b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Characters/Pilot/Textures/Pilot Head.tga",
+      "contentType": "image/png"
+    },
+    "d351870f1e11a0d4aa934a49b25aded7": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Characters/Teddy/Textures/Teddy_Eye.psd",
+      "contentType": "image/png"
+    },
+    "c01ad9ce88c224d5e99b7faf6fff86fa": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Characters/Viking/Textures/Viking Shield and Axe.tga",
+      "contentType": "image/png"
+    },
+    "c23f3ade5d43d489a93828764fc31699": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Characters/Dummy/Textures/Dummy.png",
+      "contentType": "image/png"
+    },
+    "a01325872100d2949951914e214c25ec": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Characters/Teddy/Textures/Teddy_DIF.psd",
+      "contentType": "image/png"
+    },
+    "2e0a0a413e874f14393a2e8a2ea459ad": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Characters/Teddy/Textures/Teddy_NM.png",
+      "contentType": "image/png"
+    },
+    "8bb64b30715a946c4af195846eb24774": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Props/M4/Textures/M4 Diffuse.tga",
+      "contentType": "image/png"
+    },
+    "8c5764c0d7062934fbee2c43c5e23427": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/Shared Demo Assets/Props/M4/Textures/M4 Normal.png",
+      "contentType": "image/png"
+    },
+    "155f67fd8750f8e4e83c8efb1731f3a0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/FishNet/Demos/ColliderRollback/Textures/Particles/circle.png",
+      "contentType": "image/png"
+    },
+    "b013711405ef8fd4c90d13acde9e5937": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/bush.fbm/kust.png",
+      "contentType": "image/png"
+    },
+    "f3d786bc212949f4ebe652975cff9a98": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/lion.png",
+      "contentType": "image/png"
+    },
+    "4a3ea3eb16909a646a66ff7b19d31788": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/background.png",
+      "contentType": "image/png"
+    },
+    "7cbb8805cd1ca9d4b803bacd0769bdc6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/chain_texture.png",
+      "contentType": "image/png"
+    },
+    "85ab5fb993b5fbd4eb9e2100198292d6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_arch_diff.png",
+      "contentType": "image/png"
+    },
+    "1bb468c43556ef34e99d6ca06cf9d39c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/spnza_bricks_a_diff.png",
+      "contentType": "image/png"
+    },
+    "984dc99e7d01b3c4e87f8895de965681": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_column_b_diff.png",
+      "contentType": "image/png"
+    },
+    "ea809144b1bcd014799678ae41ff1fbc": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_column_a_diff.png",
+      "contentType": "image/png"
+    },
+    "c9fc5bb00c6f6964cac372e01280c5bd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_curtain_blue_diff.png",
+      "contentType": "image/png"
+    },
+    "bd1f606b965b9c1498929217ffe65f96": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_curtain_diff.png",
+      "contentType": "image/png"
+    },
+    "82b61a31bb0eea24aba8911fe639bc35": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_fabric_blue_diff.png",
+      "contentType": "image/png"
+    },
+    "4595847f20c2c344789ed459cec8e799": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_column_c_diff.png",
+      "contentType": "image/png"
+    },
+    "c6d4404d6dc8b0046b1f8afa1249425b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_floor_a_diff.png",
+      "contentType": "image/png"
+    },
+    "1da30eb44a3fef44c94483036227e02a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_fabric_diff.png",
+      "contentType": "image/png"
+    },
+    "fb17a2099949e86418b82f7007486734": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_flagpole_diff.png",
+      "contentType": "image/png"
+    },
+    "34bd4e0e934c4e04d879033761a176a8": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_details_diff.png",
+      "contentType": "image/png"
+    },
+    "dc2994fef2ae17243a06cf0297821214": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_fabric_green_diff.png",
+      "contentType": "image/png"
+    },
+    "f47f37f891c36884fb8d8868ad231675": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_curtain_green_diff.png",
+      "contentType": "image/png"
+    },
+    "dfa559c392d5b5e47af87feecaf8c5e6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/vase_dif.png",
+      "contentType": "image/png"
+    },
+    "2adfae10edb0b9440883cddec08a8efd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_roof_diff.png",
+      "contentType": "image/png"
+    },
+    "6ed99df5a877ab248ac411b156462cc9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/vase_hanging.png",
+      "contentType": "image/png"
+    },
+    "5d1b622ece4e7cf4496941bb9cab0d79": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/vase_plant.png",
+      "contentType": "image/png"
+    },
+    "193fe39ec7010154d8aae395c1e0614b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/sponza_thorn_diff.png",
+      "contentType": "image/png"
+    },
+    "f9fb6b25c6cd9a34ebeb4b3246744105": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/sponza/sponza.fbm/vase_round.png",
+      "contentType": "image/png"
+    },
+    "c523815abc9b44f478df9c48140cf089": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_BottomTile_A.tga",
+      "contentType": "image/png"
+    },
+    "b64aa433fa1d45d42903ed9a6d0daf3d": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_BottomTile_B.tga",
+      "contentType": "image/png"
+    },
+    "a5cc9028539a870459bbf65f513f65e5": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_SFBuilding_B.tga",
+      "contentType": "image/png"
+    },
+    "4cb20e42f88794e43aa869516bf8bcc8": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_SFBuilding_Tile_A.tga",
+      "contentType": "image/png"
+    },
+    "c008532432a407243b75497be2d4e4d8": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_Graffiti_A.tga",
+      "contentType": "image/png"
+    },
+    "e271a3a4dcbd01145b5661b1c1d5d855": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_SFBuildingScreen_A.tga",
+      "contentType": "image/png"
+    },
+    "ef86aa7be5d9e5948ab36284c0e9a636": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_SFBuilding_Tile_D.tga",
+      "contentType": "image/png"
+    },
+    "646136ad6f9250d40a02d3a1c9bb62a3": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_SFBuilding_A.tga",
+      "contentType": "image/png"
+    },
+    "cabea6bbe40b2f14097d2b34e5cbf389": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_SFBuilding_Tile_B.tga",
+      "contentType": "image/png"
+    },
+    "584d4d3e780e95b41a3e4cfd81b1b165": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Tile_Snowbottom_A_D.tga",
+      "contentType": "image/png"
+    },
+    "2b6098f4176dfda43887bf5cb69a508c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Tile_Snowbottom_C_D.tga",
+      "contentType": "image/png"
+    },
+    "ee52c2c825eacd34480d6ebfbc77d82c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Tile_Snowbottom_B_D.tga",
+      "contentType": "image/png"
+    },
+    "ed8a2db43a44e894c8761ced95451ea8": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_002.tga",
+      "contentType": "image/png"
+    },
+    "f6ca9f2cf7fc88043b1d24c68844c575": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_004.tga",
+      "contentType": "image/png"
+    },
+    "1bedde7518830a2439bf71092fd43f61": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_005.tga",
+      "contentType": "image/png"
+    },
+    "3d2122e389c94d7459a589fa5b852f48": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_003.tga",
+      "contentType": "image/png"
+    },
+    "c1a5754778f03384ea1cd842a17c123b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_010.tga",
+      "contentType": "image/png"
+    },
+    "b48ca322ca7177845b22770d9080cc61": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_001.tga",
+      "contentType": "image/png"
+    },
+    "9acc20b336f4e69459ce90a57480da14": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_009.tga",
+      "contentType": "image/png"
+    },
+    "a26f036cfdeb2bc48aa01823fe5e444e": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_007.tga",
+      "contentType": "image/png"
+    },
+    "f5e3f17dfb16d6e438374e9ca758e9f5": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_006.tga",
+      "contentType": "image/png"
+    },
+    "e02e7db0c23cc0a40bf3bc156cd708e8": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_Test_Building_008.tga",
+      "contentType": "image/png"
+    },
+    "d6be1f83b0fd61f4abe062511a88af9a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_A_1F_D.png",
+      "contentType": "image/png"
+    },
+    "3fa0d20c67a906149af3e3d003e0e8fe": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_B_1F_D.png",
+      "contentType": "image/png"
+    },
+    "edb0cf67c1f378a45884bc7cce69c3d9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_BV_1F_D.png",
+      "contentType": "image/png"
+    },
+    "97adbf869356eea458493c1232a955b0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_B_2F_D.png",
+      "contentType": "image/png"
+    },
+    "7140f4790a0dd1447bf862a4cff828a2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_D_2F_D.png",
+      "contentType": "image/png"
+    },
+    "81ee7bdd728933149a5fd72c1e192e22": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_C_2F_D.png",
+      "contentType": "image/png"
+    },
+    "5f52d4fc45a7e84409ed017cd0511bd0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_Ceilng01_D.png",
+      "contentType": "image/png"
+    },
+    "56bc6e8e76bd5ac46a48829d8503b422": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_Floor01_D.png",
+      "contentType": "image/png"
+    },
+    "7c6a2430e31fcb848a535aad63e2b7c1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_Wallinside_D.png",
+      "contentType": "image/png"
+    },
+    "422989f51c141524badf7266d5c39868": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_TrimSet_D.png",
+      "contentType": "image/png"
+    },
+    "e5c4c443dc8ec8f41ae3a8a2294ccdd7": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_Door_Set_D.png",
+      "contentType": "image/png"
+    },
+    "f5948100e1183bc4093b358de917b825": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_D_1F_D.png",
+      "contentType": "image/png"
+    },
+    "6e78b8c14e3388546b656ebda48a7e8f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_BricWall_Metal_D.png",
+      "contentType": "image/png"
+    },
+    "037a5e57fb722c140a8586003e513016": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralPillar_01_D.png",
+      "contentType": "image/png"
+    },
+    "101ff0aff5811ae40a547383c2cdc8eb": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Bldg_Window_A_D.png",
+      "contentType": "image/png"
+    },
+    "4164574ed5a395c48ac5acc7d4ee4deb": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralWall_02_D.png",
+      "contentType": "image/png"
+    },
+    "17c5a8d84b1689a45b6d518471d96031": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralPillar_02_D.png",
+      "contentType": "image/png"
+    },
+    "cc15b69f865038947bd941dda4764e43": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralWall_03_D.png",
+      "contentType": "image/png"
+    },
+    "bc69e827fa86e20449a7a519c9eaf417": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralWall_04_D.png",
+      "contentType": "image/png"
+    },
+    "cc3213ebba3b52f4aa87ac23769a3fb7": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralWall_Set_03_.png",
+      "contentType": "image/png"
+    },
+    "abbfd5397a0d2da4fa5f8be34c871dfb": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Square_Floor_M.TGA",
+      "contentType": "image/png"
+    },
+    "847ab2ee1c6aa9344b7d1f6a4bb076c7": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralPillar_03_D.png",
+      "contentType": "image/png"
+    },
+    "60b927f328a0fbb46916ae3db22122c4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralWall_Set_04_D.png",
+      "contentType": "image/png"
+    },
+    "a671f996e504b9647b4f602693afc52e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralWall_Set_02_D.png",
+      "contentType": "image/png"
+    },
+    "6cee05ec77a415743abbcb87d4f11483": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Street_Floor02_d.png",
+      "contentType": "image/png"
+    },
+    "eec381c3796978a40bfd83de65da51d6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralWall_05_D.png",
+      "contentType": "image/png"
+    },
+    "7f95573a628de89499885870e7d8c701": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Metal_Deco_D.png",
+      "contentType": "image/png"
+    },
+    "6c50e70e4a04183428ee1aca5174def4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/GeneralWall_Set_D.png",
+      "contentType": "image/png"
+    },
+    "336a10e124a3c55479a576356c304eed": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Street_Floor_03_D.png",
+      "contentType": "image/png"
+    },
+    "04d026b32206a9b4db38f35970223e5c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Street_Stair_D.png",
+      "contentType": "image/png"
+    },
+    "9ab66885122df864aac100a08b5e5c28": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/BLDG_Prop/Material/Bldg_RoofTile_D.png",
+      "contentType": "image/png"
+    },
+    "74a1c1c6556c5b443965485379a3dbe6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/01_Module/Textures/Street_Floor_04_D.png",
+      "contentType": "image/png"
+    },
+    "fc0e19bd8569a4c32acda5001e678b07": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/FinalIK/_DEMOS/Assets/Car Interior/Textures/Car Interior.png",
+      "contentType": "image/png"
+    },
+    "394db8ee07ba34085bf27386f56b799c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Plugins/RootMotionFinalIK/FinalIK/_DEMOS/Assets/Mech Spider/Textures/Mech Spider.png",
+      "contentType": "image/png"
+    },
+    "a63e6417a6bd26b4fb0da2344507f496": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/BLDG_Prop/Material/Bldg_TrimSet_A_D.png",
+      "contentType": "image/png"
+    },
+    "d7cf885b616217f40b67465c6a373226": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/BLDG_Prop/Material/Bldg_WindowSet_A.png",
+      "contentType": "image/png"
+    },
+    "2b3b02d65d5a24a20a12332c4125d74b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.probuilder@1f279ab829b7/Content/Material/Textures/Checker.png",
+      "contentType": "image/png"
+    },
+    "dd51f70f8cca0ad4aa4f456152e87037": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.cinemachine@b66fdb7cd1f2/Samples~/Shared Assets/Textures/Cameron_Material_Base_Color.png",
+      "contentType": "image/png"
+    },
+    "94a3862f62ee7a84bb5746a2281cbf8b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.cinemachine@b66fdb7cd1f2/Samples~/Shared Assets/Textures/checkerboard.png",
+      "contentType": "image/png"
+    },
+    "5b9e4b7f8bee361418dbde0dfc19b965": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.cinemachine@b66fdb7cd1f2/Samples~/Shared Assets/Textures/stripes.png",
+      "contentType": "image/png"
+    },
+    "7e4b97337334f42d2a700647fd938234": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.probuilder@1f279ab829b7/Content/Material/Textures/GridBox_Collider.png",
+      "contentType": "image/png"
+    },
+    "6344bf96fbda94141a525046d088fb23": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.probuilder@1f279ab829b7/Content/Resources/Textures/GridBox_Default.png",
+      "contentType": "image/png"
+    },
+    "464ca14f3cfaf433582758afa13a9473": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.probuilder@1f279ab829b7/Content/Material/Textures/GridBox_NoDraw.png",
+      "contentType": "image/png"
+    },
+    "b3fd87e2e956e41b0b43f76bb50a4934": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.probuilder@1f279ab829b7/Content/Material/Textures/GridBox_Trigger.png",
+      "contentType": "image/png"
+    },
+    "b356831ef4f363d48989d117c6ea79e3": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.shadergraph@c8830f61858d/Samples~/Common/Textures/cobblestones_d.png",
+      "contentType": "image/png"
+    },
+    "7be741f9449557c488d643ae307fe1ab": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.shadergraph@c8830f61858d/Samples~/Common/Textures/cobblestones_n.png",
+      "contentType": "image/png"
+    },
+    "8c31c20ac2129c3428084be388816642": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.shadergraph@c8830f61858d/Samples~/Common/Textures/cobblestones_mohs.png",
+      "contentType": "image/png"
+    },
+    "feb046db34f4d424f86ecd4c04a85f0a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.splines@56b2023b4b9f/Samples~/SplineExamples/Textures/Checker.png",
+      "contentType": "image/png"
+    },
+    "10385c187d29bfa4ba388e2bb690d1ad": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.splines@56b2023b4b9f/Samples~/SplineExamples/Textures/Road.png",
+      "contentType": "image/png"
+    },
+    "c985fe3280d664e148300c56cc660dd1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Materials/Unitydark.png",
+      "contentType": "image/png"
+    },
+    "e0bae27c7ca4649979e2f41c3bca0883": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Character/Textures/DefaultMale_Albedo2.png",
+      "contentType": "image/png"
+    },
+    "f79fb2f4dc4ae4d4e9fe180ecca53904": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Character/Textures/DefaultMale_Normal.png",
+      "contentType": "image/png"
+    },
+    "87c26e2ddd4c94bd2a2b82be21d94e6e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Character/Textures/DefaultMale_Occlusion.png",
+      "contentType": "image/png"
+    },
+    "e712dfba8f09742b1a9dec7f60b4858f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Character/Textures/DefaultMale_Albedo.png",
+      "contentType": "image/png"
+    },
+    "53629c386ebe5f3469ffb10ea4d5e5ff": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.render-pipelines.universal@37e0d4fc2503/Samples~/URPPackageSamples/RendererFeatures/DistortTunnel/Plane/Plane.png",
+      "contentType": "image/png"
+    },
+    "99788167ab72747b18d1af46e93de3d1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.render-pipelines.universal@37e0d4fc2503/Samples~/URPPackageSamples/Shaders/Lit/Textures/Coins_Metallic.png",
+      "contentType": "image/png"
+    },
+    "b163bf2a288dd46efa3cc7460d5f9cd8": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.render-pipelines.universal@37e0d4fc2503/Samples~/URPPackageSamples/Shaders/Lit/Textures/Coins_Base.png",
+      "contentType": "image/png"
+    },
+    "024ea8a6f555f4b25916e47645944851": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.render-pipelines.universal@37e0d4fc2503/Samples~/URPPackageSamples/Shaders/Lit/Textures/Coins_Normal.png",
+      "contentType": "image/png"
+    },
+    "ea730d7ab169b4037bd50086a5bbfd61": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.render-pipelines.universal@37e0d4fc2503/Samples~/URPPackageSamples/Shaders/Lit/Textures/Coins_Occlusion.png",
+      "contentType": "image/png"
+    },
+    "11cf306d5a3444f37baacf805ec4bc20": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.splines@56b2023b4b9f/Samples~/SplineExamples/Models/Car/Textures/CarBumper.png",
+      "contentType": "image/png"
+    },
+    "a39d2b2c06fb74865acbc12874971968": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.splines@56b2023b4b9f/Samples~/SplineExamples/Models/Car/Textures/CarChassis.png",
+      "contentType": "image/png"
+    },
+    "2e7f5f5f8b02841eab40c11042a73966": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.splines@56b2023b4b9f/Samples~/SplineExamples/Models/Car/Textures/CarWheels.png",
+      "contentType": "image/png"
+    },
+    "7d71b7fa32a1e4c91b58f9e739b921a5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.splines@56b2023b4b9f/Samples~/SplineExamples/Models/Sign/Textures/Sign.png",
+      "contentType": "image/png"
+    },
+    "616174a6455e2444b993c8efe05f9b19": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.splines@56b2023b4b9f/Samples~/SplineExamples/Models/Sign/Textures/SignBase.png",
+      "contentType": "image/png"
+    },
+    "2c9ba3deede9b844c84fabc9d8b70c33": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Particles/Misc Effects/Textures/SparkParticle.png",
+      "contentType": "image/png"
+    },
+    "12595500d23505f44876c2e13f2e0352": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Particles/Goop Effects/Textures/GoopSprayAlbedo.png",
+      "contentType": "image/png"
+    },
+    "d3d3954ad53568b49b1fda6366f2b5ee": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Particles/Goop Effects/Textures/GoopSprayNormals.png",
+      "contentType": "image/png"
+    },
+    "394e93ce356b57344903a08ff72fcab2": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Particles/Misc Effects/Textures/DustMote.png",
+      "contentType": "image/png"
+    },
+    "271edbc011d9e03489f73cef81b2d56a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Particles/Misc Effects/Textures/DustPuffSmall.png",
+      "contentType": "image/png"
+    },
+    "c130de2b69dcb3c4eb17004f326b89bc": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/SalarDeUyun/Materials/LT_FactorySKYbox_A.tga",
+      "contentType": "image/png"
+    },
+    "fec0a589d414191419a845f0b4636150": {
+      "ext": ".asset",
+      "blobExt": ".asset",
+      "originalRelPath": "Assets/GameContents/TMP_FontAsset/Aegis-Medium SDF.asset",
+      "contentType": "application/octet-stream"
+    },
+    "2bedd6bcdaf6e8a468bb03dbe94f5134": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/musket/t_pc_common_body_male_a_b.tga",
+      "contentType": "image/png"
+    },
+    "78c08e69195a7144bb4392987faeda46": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/casing/t_casing_b.tga",
+      "contentType": "image/png"
+    },
+    "a8426ffac43537647a3f1a116f0bf5ae": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Weapon/Weapon_d_1/Common/Textures/fx_pattern_15.png",
+      "contentType": "image/png"
+    },
+    "ee27437a8f5bd30458b455bb9aedb6dd": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Agent/texture/t_agent_b.tga",
+      "contentType": "image/png"
+    },
+    "552cae8ea25c0e145a0fb1540085e880": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/Resources/Rendering/MaterialEffect/T_Iridescent.png",
+      "contentType": "image/png"
+    },
+    "b3477d910165a394594d6fe8427c3749": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Agent/texture/t_agent_weapon_001_b.tga",
+      "contentType": "image/png"
+    },
+    "37118cc2183a3294aa5ac2c92abb33d1": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Agent/texture/t_agent_weapon_002_b.tga",
+      "contentType": "image/png"
+    },
+    "878a00ad6dc7952459caf052a4793d76": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Mechanic/Texture/T_Material_001_B.tga",
+      "contentType": "image/png"
+    },
+    "92de0b0cdbc44264b9af8638c05b60f8": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Mechanic/Texture/t_mechanic_weapon_002_b.tga",
+      "contentType": "image/png"
+    },
+    "080faa00eef275c4286b2a8eb8a51fcf": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/kaya/texture/t_kaya_bp_001_b.tga",
+      "contentType": "image/png"
+    },
+    "07249a124bf13cb4c806ea4401a6538b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/kaya/texture/t_kaya_bp_001_n.tga",
+      "contentType": "image/png"
+    },
+    "d8adb3dadc43272439c6a0399b914ce5": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/kaya/texture/t_kaya_001_b re.tga",
+      "contentType": "image/png"
+    },
+    "4efbe603b98c9564e8074bb8142721ed": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/kaya/texture/t_kaya_001_n.tga",
+      "contentType": "image/png"
+    },
+    "3a3095181820c9640b01304e71c990b1": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Agent/texture/t_agent_weapon_pistol_d.tga",
+      "contentType": "image/png"
+    },
+    "b66bb83454a54dd45bb0484a63c50f06": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Mechanic/Texture/t_mechanic_weapon_001_b.tga",
+      "contentType": "image/png"
+    },
+    "e2e09963d9372d74584e1321134fa944": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Mechanic/Texture/t_mechanic_weapon_pistol_b.tga",
+      "contentType": "image/png"
+    },
+    "f5e4e384e910d74408e0972330a1d6cc": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/musket/Weapon/t_pc_weapon_musket_unique_002a_b.tga",
+      "contentType": "image/png"
+    },
+    "d1c91e7b8cc88304783411f83e3d4319": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_01/texture/T_Body_101_M_D.TGA",
+      "contentType": "image/png"
+    },
+    "d21f3209e78d85c46840d82d30530cc3": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_01/texture/T_NewEra_NewState_01_M_D_B.tga",
+      "contentType": "image/png"
+    },
+    "2fd342e3a4b79be43b89118ed4826b1c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_01/texture/M_BaseBody_01_D.TGA",
+      "contentType": "image/png"
+    },
+    "4e59f4598e2271a40b51b0969a620b1a": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_02/texture/T_NewEra_Justice_02_M_D.TGA",
+      "contentType": "image/png"
+    },
+    "f1464d81117dbe94981778e6ff1ac4d4": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_04/texture/T_Armor_TSL_Lv3_D.TGA",
+      "contentType": "image/png"
+    },
+    "4560b4ee5b27d7a4ba03d4780b5ab88e": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_01/texture/T_Inner_D_TypeA_01_U_D.TGA",
+      "contentType": "image/png"
+    },
+    "06a67d151ea287749b11d33ee312294b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/striker/texture/t_striker_backpack_b.tga",
+      "contentType": "image/png"
+    },
+    "6025ba4751d3fa2438d17854a6a3d4ac": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_03/texture/T_Hair_Mayham_03_F_RIO.TGA",
+      "contentType": "image/png"
+    },
+    "3cd7f06cf2ce38e4aa464cb65e5f6683": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/striker/texture/t_striker_001_b.tga",
+      "contentType": "image/png"
+    },
+    "e980e676dd1a5a64cb6ad09442422169": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_03/texture/T_NewEra_Mayhem_03_F_D.TGA",
+      "contentType": "image/png"
+    },
+    "fdd47bb10988c254b8dd64ca169ef74a": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_04/texture/T_NewEra_GLC_01_M_D_f3.tga",
+      "contentType": "image/png"
+    },
+    "cfd20aa10e99d594e868015938d6a90c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/striker/texture/t_striker_weapon_001_b.tga",
+      "contentType": "image/png"
+    },
+    "921b5fe09d8e84241a022956a48e3cef": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_base/texture/T_Foot_Xtrm_01_M_D.TGA",
+      "contentType": "image/png"
+    },
+    "e04a7cb74baa1c14fa440fa25be68d63": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/striker/texture/t_striker_weapon_pistol_b.tga",
+      "contentType": "image/png"
+    },
+    "283cba772b8c7e7438837021ca83cd90": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_base/texture/T_Eyes_001_M_D.TGA",
+      "contentType": "image/png"
+    },
+    "5e11c6e3fe4c3714db43d524100107f9": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/striker/texture/t_striker_weapon_002_b.tga",
+      "contentType": "image/png"
+    },
+    "a9db7346afe368f4ea7099a10c6505b7": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_base/texture/T_Hand_Xtrm_01_M_D.TGA",
+      "contentType": "image/png"
+    },
+    "498670de355698144b5c574c1f056e3f": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_base/texture/T_Face_Xtrm_01_M_D.TGA",
+      "contentType": "image/png"
+    },
+    "f94d64c3f946f8c4880de65201cfb8f8": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/vanguard/texture/t_vanguard_backpack_b.tga",
+      "contentType": "image/png"
+    },
+    "1d99c9fec1559ed4b9bf96befcdf5141": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_base/texture/T_Leg_Xtrm_01_M_D.TGA",
+      "contentType": "image/png"
+    },
+    "2dc0784b6d2706d4380b3cc1399bd09e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/vanguard/texture/t_vanghuard_b.png",
+      "contentType": "image/png"
+    },
+    "aebf1fc87d3dd4441becac61368b3a7c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/pc_base/texture/T_Body_Xtrm_01_M_D.TGA",
+      "contentType": "image/png"
+    },
+    "4eac3a2ec86dd6a4198b5f1d82013661": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/vanguard/texture/t_vanguard_weapon_001_b.tga",
+      "contentType": "image/png"
+    },
+    "ade284eb2671dec4f895c43281d33d22": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/Synapse_low/texture/t_synapse_001_d.tga",
+      "contentType": "image/png"
+    },
+    "7229809b2359f9b4eb37e3ec6d7a41bb": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/Synapse_low/texture/t_synapse_001_n.tga",
+      "contentType": "image/png"
+    },
+    "c6b1bdc389d642842aa49877bf016bf1": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/vanguard/texture/t_vanguard_weapon_002_b.tga",
+      "contentType": "image/png"
+    },
+    "08d1fef9940c1c240b6c9909e2ee27da": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/vanguard/texture/t_vanguard_weapon_pistol_b.tga",
+      "contentType": "image/png"
+    },
+    "27264baeb532294478c4f3ae30b0df84": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/testColors.png",
+      "contentType": "image/png"
+    },
+    "6db745951170f9649a20d6cf9838b087": {
+      "ext": ".psd",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Materials/DM_Sky_Sunset_D.psd",
+      "contentType": "image/png"
+    },
+    "deeb5b4c78027a14fa1d877052d92d1d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/colored_transparency_b.png",
+      "contentType": "image/png"
+    },
+    "74d453260dd1b21449bf4ecd6b3c4501": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/colored_transparency_g.png",
+      "contentType": "image/png"
+    },
+    "ae3178f73f655e242b87c24cf2efbe01": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Materials/Arc_Skydome_D.png",
+      "contentType": "image/png"
+    },
+    "d6b03e8414dd4214ab4c414b8505aff6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/colored_transparency_r.png",
+      "contentType": "image/png"
+    },
+    "f0803092c8e495f4aafb0bf8b3abe4ab": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Texttures/Sky_Sunset_02.png",
+      "contentType": "image/png"
+    },
+    "035b839a2ab02a94681a6ac3923b511c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameSources/ScriptDev/Rendering/PathGuide/Texture/GuidePath_Blue.png",
+      "contentType": "image/png"
+    },
+    "85c9a733a2d0a434eb581007569f6ef6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameSources/ScriptDev/Rendering/PathGuide/Texture/GuidePath_Red.png",
+      "contentType": "image/png"
+    },
+    "338f4e6ef331caa45bbc4ed70aa8bf4e": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_ray_34_3.png",
+      "contentType": "image/png"
+    },
+    "93940162f9bf4964daf3cdc8dc84f205": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_buster_main_01.png",
+      "contentType": "image/png"
+    },
+    "35ca382cf28a0304a9be2a3ebd5bef20": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_arcanum_galaxy_spill.png",
+      "contentType": "image/png"
+    },
+    "3e1b5661678905042ab9f9defe0faca0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_Background_paticle01.png",
+      "contentType": "image/png"
+    },
+    "fd6ca1de2d3c0af429d0a7702b5d6753": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_buster_main_02.png",
+      "contentType": "image/png"
+    },
+    "20961a17f42279647bd6383fb73f0ec9": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Flare_18_1.TGA",
+      "contentType": "image/png"
+    },
+    "1aa363d40b8fa324d90851e6874bf216": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Ray_33.png",
+      "contentType": "image/png"
+    },
+    "b7cf0fe37017adf4d85a7da175256a2f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_twirl_01.png",
+      "contentType": "image/png"
+    },
+    "bbe4273b370efff49b21c6408c1fadea": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_dao_01_6.png",
+      "contentType": "image/png"
+    },
+    "2b2433c350912d34e95b73e4648c8163": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_cross.png",
+      "contentType": "image/png"
+    },
+    "0bc1e366fd78d3c45ad2d23b20e3d2c6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_dust08.png",
+      "contentType": "image/png"
+    },
+    "b02b82ad771133044a4c473025da2586": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_twirl_05.png",
+      "contentType": "image/png"
+    },
+    "f6b397d0ee28dc34884a4f28aa38df5f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_dk_effect_010.png",
+      "contentType": "image/png"
+    },
+    "403ea92313f41ce408b47c02513452d8": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_effect_008a.png",
+      "contentType": "image/png"
+    },
+    "455d698ebd0716e408ea575e632486ef": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_DungeonRing_01.png",
+      "contentType": "image/png"
+    },
+    "f46eb17722be6894f8105fdb80cf20aa": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_electro_03_blue.png",
+      "contentType": "image/png"
+    },
+    "4e7fcce404a9da34ea0417b204f6138b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_flare2b_basic.png",
+      "contentType": "image/png"
+    },
+    "5fefcdf9f828e8943ac0a665b77e9f83": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_flare1_purpleelec.tga",
+      "contentType": "image/png"
+    },
+    "558cc0122e7a9b94f97e38a848ded855": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_fire10.png",
+      "contentType": "image/png"
+    },
+    "410a79895a0febf44b657b8fa74d4922": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_fanwei_01.png",
+      "contentType": "image/png"
+    },
+    "3ddf4a28a604e264c9bdfd1c228d3d3c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_flare2borange.png",
+      "contentType": "image/png"
+    },
+    "a870f392f9ee90d44b80ed587fb8b1dd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Ray_02.png",
+      "contentType": "image/png"
+    },
+    "9186fe3fcb4109e4dbd4cd9b3ca6bb96": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Flare_02.png",
+      "contentType": "image/png"
+    },
+    "2baa8cc1be1b8094db46386851b151c8": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_crack_ground_02.png",
+      "contentType": "image/png"
+    },
+    "8533bfb72be08ec44943f29d970570a5": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_glow_purple.png",
+      "contentType": "image/png"
+    },
+    "ffc8bd1d6730087458170c9c30c57090": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_flare_42.PNG",
+      "contentType": "image/png"
+    },
+    "dc3d1e77d5e00f744b6d5dae3475d13c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Mask_20.png",
+      "contentType": "image/png"
+    },
+    "8c13e3ff271f6ef48b4a8c0a31b9ef27": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Shock_119.tga",
+      "contentType": "image/png"
+    },
+    "04b4f0ddbb9a76f4db1fde0ca22a1283": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Flare_02_1.PNG",
+      "contentType": "image/png"
+    },
+    "865d386bf4f84df4a9012156db25807c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Magic_01.png",
+      "contentType": "image/png"
+    },
+    "f9042463c4313d0479286b2a344ba1e4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_mask_12.png",
+      "contentType": "image/png"
+    },
+    "d82dada91ecf9ff469f4b657e914db01": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Mask_01.png",
+      "contentType": "image/png"
+    },
+    "a75988016ceb015439ae62d54df31a8c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Debris_02.png",
+      "contentType": "image/png"
+    },
+    "ca10f959ba5da6042abb3a1ad3df6584": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Distort_35.png",
+      "contentType": "image/png"
+    },
+    "679bad98842f2934e9565cb80ba2e7d1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Flare_41.png",
+      "contentType": "image/png"
+    },
+    "d2dd1af2bc20ae048aa22839bbc337cc": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_glow002_w.png",
+      "contentType": "image/png"
+    },
+    "0776b33a41fcea34a9d0a179edca4706": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_smoke_04______.tga",
+      "contentType": "image/png"
+    },
+    "e68b3737527537f46a9b90892f32ddf7": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_glowa_ball_grey.png",
+      "contentType": "image/png"
+    },
+    "40307c7169d6da940aa38b86ea8e1d4a": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_glow03.png",
+      "contentType": "image/png"
+    },
+    "49706938f99d97241895e732d108b573": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_glow_h_0018.png",
+      "contentType": "image/png"
+    },
+    "2d89dde3935da7a43b117118395597cc": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_glow_ball2_grey.png",
+      "contentType": "image/png"
+    },
+    "580c14637718af546a866c5e55595120": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_huang_bigring.png",
+      "contentType": "image/png"
+    },
+    "beec325e05dd25f48ba67acde0351382": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_godAxe_A1.png",
+      "contentType": "image/png"
+    },
+    "0900952a0a18b2c4aa4cb8090dd31976": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/T_ElectricNoises.png",
+      "contentType": "image/png"
+    },
+    "f4685c414f7547d4499e2b33b6b25bb0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_ground_dl_01_blue1.png",
+      "contentType": "image/png"
+    },
+    "5fab2b370993a894f8b470a65b317129": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_huang_bigring02.png",
+      "contentType": "image/png"
+    },
+    "9fe9cb53d9dd8e549ac7734da0abb5f1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/noise_03.png",
+      "contentType": "image/png"
+    },
+    "0b512af7d1c07bc4dae89d450c8ef27f": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_glow_point2_yellow.png",
+      "contentType": "image/png"
+    },
+    "8cfd7182aebbb314ea0a3e8e92ac070d": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_huang_elec_sequ01.tga",
+      "contentType": "image/png"
+    },
+    "bba6558790387514bb1ad8c4aed368d1": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_lightning_gold.tga",
+      "contentType": "image/png"
+    },
+    "4a1b25b5776c6f34d9a8fecec0feebf0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_mask_10.png",
+      "contentType": "image/png"
+    },
+    "53ac02098ffaff941b84fa23551c3de1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_huang_thinRing.png",
+      "contentType": "image/png"
+    },
+    "090576b26acfaf141b2d13e88a11329e": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_huang_elec_sequ02.tga",
+      "contentType": "image/png"
+    },
+    "cefc448828e6a80419a15a9a90b442d6": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_muzzleParticles.png",
+      "contentType": "image/png"
+    },
+    "7ca3906b155bb3b4e901c56f7d3de934": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Ray_01_1.TGA",
+      "contentType": "image/png"
+    },
+    "06470df59eb1fc8438723e18ca972551": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_poison_smoke_pink4.png",
+      "contentType": "image/png"
+    },
+    "c2665207210e10140a09f223becbb5ca": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_ring02_b.png",
+      "contentType": "image/png"
+    },
+    "f3646a8e8ad104a7bbabb6f78acea7e6": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_ray_01a.tga",
+      "contentType": "image/png"
+    },
+    "41111bdccdcf09f40b77d838ad72201c": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_ring_04.png",
+      "contentType": "image/png"
+    },
+    "405ada7f08137bf4083dc08d3cfdf793": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_ray_08.png",
+      "contentType": "image/png"
+    },
+    "f59375fa69cf21647b44e679b4975d01": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_pulse_smoke3.png",
+      "contentType": "image/png"
+    },
+    "8e94ad84db25d5543b45a76be26886e0": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_ring_38.png",
+      "contentType": "image/png"
+    },
+    "75306df37ca1c1a43be50c8434256991": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Ring_03.png",
+      "contentType": "image/png"
+    },
+    "fcd0be26c4de0cf4c88e657bc6879ac9": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_rope01.png",
+      "contentType": "image/png"
+    },
+    "8aa52315390b26c4ab60db0be168a985": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_smoke_54.png",
+      "contentType": "image/png"
+    },
+    "e438db6f250f7e440be3f6e33c450d33": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_Ring_b.png",
+      "contentType": "image/png"
+    },
+    "a8842bc7982fd4343aa891d598dd2bbf": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_speed_twinkle.png",
+      "contentType": "image/png"
+    },
+    "ae3b60fa686e8834b98717688d78ea86": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Mask_04.png",
+      "contentType": "image/png"
+    },
+    "9db0f698fb0457e458f16ce2eb6a6a7b": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_stone2.png",
+      "contentType": "image/png"
+    },
+    "743758eb17343184cac2a3581ca23e0d": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_star_blue01.png",
+      "contentType": "image/png"
+    },
+    "b2e3075485469244c8c2313d89c34e61": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_grad01_14.png",
+      "contentType": "image/png"
+    },
+    "5877d7d8fb4bfea439175b459c2af3eb": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_twinkle-add.png",
+      "contentType": "image/png"
+    },
+    "e45f53c7493c8eb4eaaa8c4101b1cabd": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/T_StylizedTrail04.png",
+      "contentType": "image/png"
+    },
+    "c331f8e835b05164aa491d7388ba52a1": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/fx_wenli_RM_luoxuan_alpha.png",
+      "contentType": "image/png"
+    },
+    "4612a9213a7a1cc418d5a989fdead159": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/FX/Players/Common/Textures/FX_Distort_44.png",
+      "contentType": "image/png"
+    },
+    "d217007fc26510646a722d32a40a709c": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/ar_kestrel_low/texture/t_mechanic_weapon_002_b.tga",
+      "contentType": "image/png"
+    },
+    "6af1f05edaf7be445a856cff45d22d17": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/dmr_mullet_low/texture/t_mechanic_weapon_001_b.tga",
+      "contentType": "image/png"
+    },
+    "70f99bb06f6a7964ea2d1b9d14b1567b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_nike_mid/texture/t_vanguard_weapon_pistol_b.tga",
+      "contentType": "image/png"
+    },
+    "83ff1484fd771d043b9d0f6831dd98b3": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_juno_low/texture/t_mechanic_weapon_pistol_b.tga",
+      "contentType": "image/png"
+    },
+    "f0b8e2a020e6b4c438828e7c534d0c87": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/hg_skadi_low/texture/t_agent_weapon_pistol_d.tga",
+      "contentType": "image/png"
+    },
+    "42098a0b2bfcd654d9ee029b64f1ec75": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/sg_thor_mid/texture/t_vanguard_weapon_001_b.tga",
+      "contentType": "image/png"
+    },
+    "e37e7f702ed51c843a1824be72e4e5f9": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Weapon/Weapon_g_1/sr_dominion_low/texture/t_agent_weapon_002_b.tga",
+      "contentType": "image/png"
+    },
+    "0821e9c238609204f8e786e114891106": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/Factory_Test_A/LT_FactoryLine_A_D.tga",
+      "contentType": "image/png"
+    },
+    "3050c5346dd181948bc7227b60c8a630": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_M1_SFSnow_Tile_B.tga",
+      "contentType": "image/png"
+    },
+    "3b2a3ffb14002664eb048cf329cc00d9": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_Tile_LabsBottom_A_D.tga",
+      "contentType": "image/png"
+    },
+    "252fc58745c3ba247bcc7cef81c96007": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_Tile_LabsWall_A_D.tga",
+      "contentType": "image/png"
+    },
+    "09cafd3e13a21174093e9b30600ab627": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_Tile_FactoryWall_B_D.tga",
+      "contentType": "image/png"
+    },
+    "7e6b2084b0eab6a49974ad7c74c9df32": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/T_Tile_FactoryWall_A_D.tga",
+      "contentType": "image/png"
+    },
+    "30ef0bf18d9af6143aa7e4b1da0a197b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/angel_low/texture/t_angel_001_b.tga",
+      "contentType": "image/png"
+    },
+    "8df7e102f540b95469b64082b243711f": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/angel_low/texture/t_angel_001_n.tga",
+      "contentType": "image/png"
+    },
+    "dc47fee94886f3d41b25e3f5ddc9b372": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/striker_low/texture/t_striker_backpack_b.tga",
+      "contentType": "image/png"
+    },
+    "e018fa35d028aa1408ebf212cea1ee7b": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/striker_low/texture/t_striker_backpack_n.tga",
+      "contentType": "image/png"
+    },
+    "45862fecf824a6a4794d0b6ab849c548": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/striker_low/texture/t_striker_001_b.tga",
+      "contentType": "image/png"
+    },
+    "2b728d851a5848e4aa2b50989468b974": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/striker_low/texture/t_striker_001_n.tga",
+      "contentType": "image/png"
+    },
+    "a4d5c20e84a807844b3c643911407e34": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/Synapse_low/texture/t_synapse_001_d.tga",
+      "contentType": "image/png"
+    },
+    "91769f5dd1e61da4a9fcc0dc23282ccf": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/vanguard_low/texture/t_vanghuard_b.png",
+      "contentType": "image/png"
+    },
+    "3b241379bb03c1f4cb5d36bbbbb86ae4": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/vanguard_low/texture/t_vanghuard_n.png",
+      "contentType": "image/png"
+    },
+    "b3dfc4fb4d22f584281d6f61dbb8721d": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/vanguard_low/texture/t_vanguard_backpack_b.tga",
+      "contentType": "image/png"
+    },
+    "65bcbec7b17f22b4392b167720f71972": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/vanguard_low/texture/t_vanguard_backpack_n.tga",
+      "contentType": "image/png"
+    },
+    "9d1b6e41212e80643be96e6e5eb51063": {
+      "ext": ".tga",
+      "blobExt": ".png",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/Architecture/00_RefBuildings/Textures/T_M1_Greenwall_A.tga",
+      "contentType": "image/png"
+    },
+    "229985cfd25c949498041f75324bdc75": {
+      "ext": ".png",
+      "blobExt": ".png",
+      "originalRelPath": "Library/PackageCache/com.unity.timeline@7f8b2fb101b6/Samples~/GameplaySequenceDemo/Textures/Grid_albedo.png",
+      "contentType": "image/png"
+    },
+    "68d01bf4b82936b41b7b92dd9c76dc8e": {
+      "ext": ".asset",
+      "blobExt": ".asset",
+      "originalRelPath": "Assets/StorePlugins/Bakery/examples/content/example_volumes_global_skybox.asset",
+      "contentType": "application/octet-stream"
+    },
+    "4c02873814e3baa4f8651cdd5852d2e6": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Reference/ExtreamObjectExport/00_Baltic/Baltic_Railing_01.FBX",
+      "contentType": "model/fbx"
+    },
+    "bf0cf84e27aa12b4480e5b0fabbb3c3a": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Reference/ExtreamObjectExport/04_ParadiseFalls/SM_Paradise_Prop_Lift_01_B.FBX",
+      "contentType": "model/fbx"
+    },
+    "5d02f55f239ca5f4e8066b260fd33e41": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/TheArcticFrontier/Meshes/Temp/Map_Arc_Lab.fbx",
+      "contentType": "model/fbx"
+    },
+    "32cb29b202d0215478759cecc4cff83b": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/Meshes/TF2_Terrain.fbx",
+      "contentType": "model/fbx"
+    },
+    "259eb9a30b8706f458c3039445bd5b18": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_Sand_B.fbx",
+      "contentType": "model/fbx"
+    },
+    "da3044fa18508d14aabbe0cc60bf1bf8": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_StartPoint_meshshadow.fbx",
+      "contentType": "model/fbx"
+    },
+    "a6326dba8fb942344bc80103c2cca8f8": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_WallStairSet_L.fbx",
+      "contentType": "model/fbx"
+    },
+    "ad2f88ae4c0fbe14887c451915f77e40": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_Point_Center.fbx",
+      "contentType": "model/fbx"
+    },
+    "b84956df949d14d429332c38f1ff1e9f": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_Cave_A_wall_Col.fbx",
+      "contentType": "model/fbx"
+    },
+    "a7af662b286893c4f92b19e97afc1ab5": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_BLDG_ATeam_B_col.fbx",
+      "contentType": "model/fbx"
+    },
+    "6227ede59f81dea4f9f03513284bcb59": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_BLDG_ATeam_B_col2.fbx",
+      "contentType": "model/fbx"
+    },
+    "9e3ef84a09a29494fb2b3ad928544656": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_BLDG_ATeam_C_col.fbx",
+      "contentType": "model/fbx"
+    },
+    "4c4a855a434eb874d8ccf944e07b1bed": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/DesertSunMine/Meshes/DM_Cave_A_col.fbx",
+      "contentType": "model/fbx"
+    },
+    "db6b5702af345314a9409bb2420204dc": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Environment/Temp_M1/M1_Maps/RnD_Ice/IceLabs_A.fbx",
+      "contentType": "model/fbx"
+    },
+    "6668d9262bba0dd41ab6d1e4cdd7aca8": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Reference/ExtreamObjectExport/08_Africa/SM_Africa_Prop_AirRoute_Out_TextSign_01.FBX",
+      "contentType": "model/fbx"
+    },
+    "ec80d26ae0bb65c46bbd1c836345cf63": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Reference/ExtreamObjectExport/08_Africa/SM_Africa_Prop_AirRoute_Out_TextSign_02.FBX",
+      "contentType": "model/fbx"
+    },
+    "ac5eef1e08c85054285d7119026ceab2": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/Reference/ExtreamBuildingFBX/09_CrashSite/SM_Miramar_Factory_02.FBX",
+      "contentType": "model/fbx"
+    },
+    "a756a34cbe26cc240804943a0055a188": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_DevArt/TF2_Env_Resource/TPS/TPS_TeamMap.fbx",
+      "contentType": "model/fbx"
+    },
+    "9b49e922223ddbb4191985ea1b9df8ff": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Character/Player/Player_g_1/striker_low/mesh/striker_low.fbx",
+      "contentType": "model/fbx"
+    },
+    "c392d081eb00fc64b91518acdc3b53d7": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/DevAssets(not packed)/_3DModel/striker/striker_weapon_001.fbx",
+      "contentType": "model/fbx"
+    },
+    "a890c2483d4cb0943a72cf663370b1fb": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_stand_aim_idle.fbx",
+      "contentType": "model/fbx"
+    },
+    "96a7ca11a3b7aac47a6905a6175d373e": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_stand_run_f.fbx",
+      "contentType": "model/fbx"
+    },
+    "eb4ca948711fe0943aa7f94d34bfcd10": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_stand_aim_run_f.fbx",
+      "contentType": "model/fbx"
+    },
+    "204a80b70b90b8d4294a885dd7f6ebca": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_stand_aim_run_b.fbx",
+      "contentType": "model/fbx"
+    },
+    "648c4e3e19e6fce4c8d1aabd91f7205c": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_stand_aim_run_l.fbx",
+      "contentType": "model/fbx"
+    },
+    "d11afb85d6bc053418016f9081879065": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_stand_aim_run_r.fbx",
+      "contentType": "model/fbx"
+    },
+    "9fbad436d143fca478fa8ea42ed129ba": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Common/jump_start.fbx",
+      "contentType": "model/fbx"
+    },
+    "02e4dab38a9dbb5479f83aa3cc4198fe": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Common/jump_loop.fbx",
+      "contentType": "model/fbx"
+    },
+    "f99d7b1af56db6b40a85bc0228a06d67": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Common/jump_end.fbx",
+      "contentType": "model/fbx"
+    },
+    "79fe1cfd902bc0642ac75e3ca0665d87": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_crouch_aim_idle.fbx",
+      "contentType": "model/fbx"
+    },
+    "f22fbbf1830463347b0aa538a70101da": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_crouch_walk_f.fbx",
+      "contentType": "model/fbx"
+    },
+    "fbd1de97965faa84ba111590fcd1b052": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_crouch_aim_walk_f.fbx",
+      "contentType": "model/fbx"
+    },
+    "e3538b7c419f7344d9cf01ee5e33808c": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_crouch_aim_walk_b.fbx",
+      "contentType": "model/fbx"
+    },
+    "ffc1643e7a36158438cca6614f371330": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_crouch_aim_walk_l.fbx",
+      "contentType": "model/fbx"
+    },
+    "bf2bbf7db58eaac4faa3df26ae725e90": {
+      "ext": ".fbx",
+      "blobExt": ".fbx",
+      "originalRelPath": "Assets/GameContents/Animation/Rifle/rifle_crouch_aim_walk_r.fbx",
+      "contentType": "model/fbx"
+    }
+  },
+  "fbxMaterialPacks": [
+    "9b49e922223ddbb4191985ea1b9df8ff",
+    "c392d081eb00fc64b91518acdc3b53d7"
+  ]
+}

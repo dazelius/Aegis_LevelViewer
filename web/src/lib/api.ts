@@ -175,8 +175,38 @@ export interface GameObjectNode {
   children: GameObjectNode[];
 }
 
+// ---------------------------------------------------------------------
+// Base-URL plumbing for reverse-proxied deploys
+// ---------------------------------------------------------------------
+//
+// When Aegisgram is embedded in a platform that mounts us under a
+// sub-path (e.g. `/api/v1/ai-tools/21/proxy/` on UAAutoTool), every
+// absolute path like `/api/health` otherwise resolves to the host root
+// and misses the proxy. Vite's `import.meta.env.BASE_URL` carries the
+// mount prefix determined at build time via `AEGISGRAM_APP_BASE`
+// (defaults to `/`). These helpers join that prefix to any
+// leading-slash path the caller hands us, and also build the ws URL.
+const RAW_BASE = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+
+/** Resolve an API path (e.g. `/api/health`) against the deploy base. */
+export function apiUrl(path: string): string {
+  if (!path.startsWith('/')) path = `/${path}`;
+  return `${RAW_BASE}${path}`;
+}
+
+/** Resolve a WebSocket path (e.g. `/ws/multiplayer`) against the deploy
+ *  base, using the current page scheme/host. */
+export function wsUrl(path: string): string {
+  if (!path.startsWith('/')) path = `/${path}`;
+  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${scheme}://${window.location.host}${RAW_BASE}${path}`;
+}
+
+/** Public read-only accessor so the router can mirror the deploy base. */
+export const APP_BASE: string = RAW_BASE || '/';
+
 export async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await fetch(apiUrl(url));
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
@@ -185,7 +215,7 @@ export async function apiGet<T>(url: string): Promise<T> {
 }
 
 export async function apiPost<T>(url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -198,7 +228,7 @@ export async function apiPost<T>(url: string, body?: unknown): Promise<T> {
 }
 
 export function textureUrl(guid: string): string {
-  return `/api/assets/texture?guid=${encodeURIComponent(guid)}`;
+  return apiUrl(`/api/assets/texture?guid=${encodeURIComponent(guid)}`);
 }
 
 export async function fetchLevels(): Promise<SceneListItem[]> {

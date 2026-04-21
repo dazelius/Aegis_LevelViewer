@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { apiUrl } from './api';
 
 /**
  * Client-side cache for FBX assets.
@@ -259,7 +260,7 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
     return entry;
   };
 
-  const url = `/api/assets/mesh?guid=${encodeURIComponent(guid)}`;
+  const url = apiUrl(`/api/assets/mesh?guid=${encodeURIComponent(guid)}`);
   let res: Response;
   try {
     res = await fetch(url);

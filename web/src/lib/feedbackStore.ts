@@ -25,6 +25,8 @@
  * knowing who authored them would merge identity across users).
  */
 
+import { apiUrl } from './api';
+
 export const STORE_VERSION = 1;
 
 export interface FeedbackCameraPose {
@@ -220,7 +222,7 @@ hydrateFromLocalStorage();
  *  Silent on network failure — the cache keeps whatever it had. */
 export async function refreshFeedbacks(scenePath: string): Promise<Feedback[] | null> {
   try {
-    const res = await fetch(`/api/feedbacks?scenePath=${encodeURIComponent(scenePath)}`);
+    const res = await fetch(apiUrl(`/api/feedbacks?scenePath=${encodeURIComponent(scenePath)}`));
     if (!res.ok) throw new Error(`GET /api/feedbacks ${res.status}`);
     const body = (await res.json()) as { feedbacks?: Feedback[] };
     const list = Array.isArray(body.feedbacks) ? body.feedbacks : [];
@@ -243,7 +245,7 @@ export async function addFeedback(fb: Feedback): Promise<void> {
   const nextLocal = [...current.filter((x) => x.id !== fb.id), withDefaults];
   setCacheForScene(fb.scenePath, nextLocal);
   try {
-    const res = await fetch('/api/feedbacks', {
+    const res = await fetch(apiUrl('/api/feedbacks'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(withDefaults),
@@ -289,7 +291,7 @@ export async function toggleLike(
     patchCacheEntry(scenePath, { ...existing, likes: nextLikes });
   }
   try {
-    const res = await fetch(`/api/feedbacks/${encodeURIComponent(id)}/like`, {
+    const res = await fetch(apiUrl(`/api/feedbacks/${encodeURIComponent(id)}/like`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scenePath, nickname }),
@@ -331,7 +333,7 @@ export async function addComment(
     });
   }
   try {
-    const res = await fetch(`/api/feedbacks/${encodeURIComponent(id)}/comment`, {
+    const res = await fetch(apiUrl(`/api/feedbacks/${encodeURIComponent(id)}/comment`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scenePath, commentId, author, text: trimmed }),
@@ -364,7 +366,9 @@ export async function removeFeedbackComment(
   }
   try {
     const res = await fetch(
-      `/api/feedbacks/${encodeURIComponent(id)}/comment/${encodeURIComponent(commentId)}?scenePath=${encodeURIComponent(scenePath)}`,
+      apiUrl(
+        `/api/feedbacks/${encodeURIComponent(id)}/comment/${encodeURIComponent(commentId)}?scenePath=${encodeURIComponent(scenePath)}`,
+      ),
       { method: 'DELETE' },
     );
     if (!res.ok && res.status !== 404) {
@@ -411,7 +415,7 @@ export async function setFeedbackStatus(
   }
   try {
     const res = await fetch(
-      `/api/feedbacks/${encodeURIComponent(id)}/status`,
+      apiUrl(`/api/feedbacks/${encodeURIComponent(id)}/status`),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -435,7 +439,7 @@ export async function removeFeedback(scenePath: string, id: string): Promise<voi
   if (next.length !== current.length) setCacheForScene(scenePath, next);
   try {
     const res = await fetch(
-      `/api/feedbacks?scenePath=${encodeURIComponent(scenePath)}&id=${encodeURIComponent(id)}`,
+      apiUrl(`/api/feedbacks?scenePath=${encodeURIComponent(scenePath)}&id=${encodeURIComponent(id)}`),
       { method: 'DELETE' },
     );
     if (!res.ok && res.status !== 404) {
@@ -459,7 +463,7 @@ export async function removeFeedback(scenePath: string, id: string): Promise<voi
  * by the poll cadence rather than requiring manual refresh.
  */
 export async function fetchAllFeedbacks(limit = 200): Promise<Feedback[]> {
-  const res = await fetch(`/api/feedbacks/all?limit=${encodeURIComponent(String(limit))}`);
+  const res = await fetch(apiUrl(`/api/feedbacks/all?limit=${encodeURIComponent(String(limit))}`));
   if (!res.ok) throw new Error(`GET /api/feedbacks/all ${res.status}`);
   const body = (await res.json()) as { feedbacks?: Feedback[] };
   const list = Array.isArray(body.feedbacks) ? body.feedbacks : [];

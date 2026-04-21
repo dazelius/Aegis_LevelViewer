@@ -133,7 +133,9 @@ path produces the same artifacts.
 | `GITLAB_REPO2_URL`              | build       | Aegis repo HTTPS URL.                                   |
 | `GITLAB_REPO2_TOKEN`            | build       | GitLab Personal Access Token (read_repository).         |
 | `AEGISGRAM_POST_BAKE_CLEANUP`   | build       | `1` to delete `data/repos/` after bake (saves disk).    |
-| `AEGISGRAM_IFRAME_ORIGINS`      | runtime     | Space-separated origins allowed to embed in `<iframe>`. |
+| `AEGISGRAM_IFRAME_ORIGINS`      | runtime     | Space-separated origins allowed to embed in `<iframe>`. Use `*` to allow any ancestor (escape hatch for platforms with deep ancestor chains). |
+| `AEGISGRAM_APP_BASE`            | build       | Sub-path the platform mounts the app under, e.g. `/api/v1/ai-tools/21/proxy/`. Drives Vite's `base`, the React Router `basename`, and the API/WS URL prefix so every request hits the proxy correctly. Leave unset / `/` for plain-root deploys. |
+| `AEGISGRAM_FORCE_LIVE`          | runtime     | `true` skips bundle detection and bulk LFS fetch; scenes and assets are fetched lazily per request. Use when you want fast cold-start behaviour over pre-baked content. |
 | `PORT`                          | runtime     | Usually auto-injected by the platform.                  |
 | `NODE_ENV`                      | runtime     | `production`.                                           |
 

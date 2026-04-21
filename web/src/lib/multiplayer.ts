@@ -1,3 +1,4 @@
+import { wsUrl } from './api';
 import { applyServerFeedbackEvent, type Feedback } from './feedbackStore';
 import { getNickname, subscribeNickname } from './nickname';
 
@@ -156,13 +157,11 @@ export function getSelfId(): string | null {
 // ---------------------------------------------------------------------
 
 function buildUrl(): string {
-  const loc = window.location;
-  const scheme = loc.protocol === 'https:' ? 'wss' : 'ws';
-  // Vite dev server proxies `/ws/...` through to the backend via
-  // `server.proxy` (configured in vite.config.ts). In production the
-  // web bundle and the backend share an origin, so the same path
-  // just works.
-  return `${scheme}://${loc.host}/ws/multiplayer`;
+  // `wsUrl()` honours the Vite `base` so the URL survives reverse-proxy
+  // deploys (e.g. platform mount at `/api/v1/ai-tools/21/proxy/`). The
+  // Vite dev server still proxies `/ws/...` through to the backend via
+  // `server.proxy` (configured in vite.config.ts) when BASE_URL is '/'.
+  return wsUrl('/ws/multiplayer');
 }
 
 /** Ensure the WebSocket is open (or connecting). Safe to call many

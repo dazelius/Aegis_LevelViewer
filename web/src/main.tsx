@@ -5,12 +5,13 @@ import App from './App';
 import LevelList from './pages/LevelList';
 import LevelViewer from './pages/LevelViewer';
 import FeedView from './pages/FeedView';
+import { APP_BASE } from './lib/api';
 import './styles.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={APP_BASE}>
       <Routes>
         <Route path="/" element={<App />}>
           <Route index element={<LevelList />} />
