@@ -206,15 +206,27 @@ async function fetchLfsAssets(targetDir: string): Promise<void> {
   } as Record<string, string>);
   attachGitStreamLogger(lfsGit);
 
-  // Order matters: text-only first, so even if every binary batch
-  // fails we still have scene YAML for a valid (textureless) bake.
-  const batches = config.gitFetchLfs
-    ? [...TEXT_ONLY_EXTS, ...BINARY_EXTS]
-    : TEXT_ONLY_EXTS;
+  // When the server has lazy LFS (lazyLfs.ts) available, we only need
+  // text assets (.unity, .mat, .prefab, …) at startup — binary blobs
+  // (textures, meshes) are fetched on demand when a scene is opened.
+  // The `LEVEL_VIEWER_LFS_STARTUP` env var controls startup behaviour:
+  //   'text-only' (default when lazy LFS exists) — fast startup, ~1 min
+  //   'full' — legacy behaviour, all 17 batches, 20-40 min
+  // config.gitFetchLfs still gates whether we fetch anything beyond the
+  // text baseline at all (when false, BINARY_EXTS are never touched).
+  const startupMode =
+    (process.env.LEVEL_VIEWER_LFS_STARTUP || '').toLowerCase() === 'full'
+      ? 'full'
+      : 'text-only';
+
+  const batches =
+    startupMode === 'full' && config.gitFetchLfs
+      ? [...TEXT_ONLY_EXTS, ...BINARY_EXTS]
+      : TEXT_ONLY_EXTS;
 
   console.log(
     `[gitSync] lfs fetch in ${batches.length} extension batches ` +
-      `(${config.gitFetchLfs ? 'full' : 'text-only'}, skipdownloaderrors=on)...`,
+      `(${startupMode}, skipdownloaderrors=on)…`,
   );
 
   let okCount = 0;
