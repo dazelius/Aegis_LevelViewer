@@ -142,14 +142,29 @@ function SceneLoadOverlay({
 
   // Friendly copy. The server's own `hint` (e.g. "LFS fetch in progress
   // or upstream blob missing — retry shortly") is the most informative
-  // thing we can show, so prefer it once we've seen a 409; otherwise
-  // fall back to a generic "connecting" line.
+  // thing we can show, so prefer it once we've seen a 409. Before the
+  // first 409, we pick a message based on elapsed time: the scene
+  // request is currently blocked on the server for up to ~22 s while
+  // it synchronously pulls the scene's LFS blob and its referenced
+  // .mat / .prefab pointers — "Connecting to the server…" during
+  // that window reads as though nothing is happening, so we shift to
+  // a "downloading" phrasing once we've been waiting long enough to
+  // know it's not a fast local hit.
   const headline = error ? 'Failed to load scene' : 'Loading scene…';
-  const hint = error
-    ? error
-    : progress?.hint
-      ? progress.hint
-      : 'Connecting to the server…';
+  let hint: string;
+  if (error) {
+    hint = error;
+  } else if (progress?.hint) {
+    hint = progress.hint;
+  } else if (elapsedMs < 1500) {
+    hint = 'Connecting to the server…';
+  } else {
+    // First request is still in flight. Server is blocking for up to
+    // ~16 s on the scene .unity blob then ~6 s on .mat / .prefab
+    // pre-fetch before it will return anything — tell the user that
+    // so they don't think the app is frozen.
+    hint = 'Downloading scene from Git LFS…';
+  }
 
   return (
     <div className={`scene-load-overlay${error ? ' is-error' : ''}`}>
