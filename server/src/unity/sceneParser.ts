@@ -596,10 +596,32 @@ export async function buildGameObjectTree(
     if (node) roots.push(node);
   }
 
-  // --- PrefabInstance expansion pass ------------------------------------
+  // --- PrefabInstance expansion (two-pass) ------------------------------
   // For each PrefabInstance doc, load the source .prefab, clone its tree,
   // apply m_Modification.m_Modifications, then splice it in at the referenced
   // parent Transform (or at scene root if m_TransformParent = 0).
+  //
+  // The loop is split into Pass A (build + register) and Pass B (attach) so
+  // one PrefabInstance's `m_TransformParent` can resolve to a stripped-alias
+  // registered by another PrefabInstance that appears LATER in the file.
+  // Composite prefabs like `DM_EV_A.prefab` are authored without any native
+  // GameObject documents — they consist only of PrefabInstance docs, and the
+  // first doc in file order (a DM_Cliff_A child) references the DM_EV_A
+  // root's stripped-alias Transform fileID, but the DM_EV_A-root
+  // PrefabInstance (the doc that owns that alias) sits later in the file.
+  // A single-pass loop looks up `byTransformFileID[parentId]` BEFORE the
+  // owner has had a chance to register the alias, so the child gets pushed
+  // into `roots`, becomes `tree.roots[0]`, and `parsePrefabByGuid` hands it
+  // back as the prefab root — producing the wrong mesh, wrong material slot
+  // bindings, and a "lying down" prop in every scene placement of DM_EV_A.
+  // Registering all aliases in Pass A before any parent lookup fires in
+  // Pass B makes document order irrelevant.
+  type PendingPrefabAttach = {
+    prefabNode: GameObjectNode;
+    parentId: string | undefined;
+  };
+  const pendingPrefabAttach: PendingPrefabAttach[] = [];
+
   for (const d of docs) {
     if (d.header.classId !== CLASS_PREFAB_INSTANCE) continue;
     opts.stats.prefabInstances += 1;
@@ -654,24 +676,6 @@ export async function buildGameObjectTree(
     opts.stats.lights += countLights(prefabNode);
     opts.stats.cameras += countCameras(prefabNode);
 
-    // Attach the cloned sub-tree to its parent BEFORE merging the nested
-    // prefab's fileID namespace into ours. If we merged first, the nested
-    // prefab's own native root fileIDs would clobber this outer prefab's
-    // (because Unity reuses small fileIDs like `629154658267911177` across
-    // prefabs — they're scoped per-file, not globally unique). The parent
-    // lookup below must see the OUTER prefab's map, untouched.
-    const parentId = fileIdOf(mod['m_TransformParent']);
-    if (parentId) {
-      const parent = byTransformFileID.get(parentId);
-      if (parent) {
-        parent.children.push(prefabNode);
-      } else {
-        roots.push(prefabNode);
-      }
-    } else {
-      roots.push(prefabNode);
-    }
-
     // Propagate the inner prefab's fileID namespace outward so scene-level
     // overrides like `{fileID: wallChildXformInWallModule, guid: Blue}` can
     // resolve three prefabs deep. Crucially, we only fill in entries that
@@ -679,6 +683,13 @@ export async function buildGameObjectTree(
     // authoritative, and nested prefab roots commonly reuse the same small
     // fileIDs (e.g. both StairSet_2m and its nested Stair use
     // `629154658267911177` as their native Transform ID).
+    //
+    // Projecting in Pass A (before Pass B's parent lookups fire) is safe:
+    // `m_TransformParent` only ever points at the OUTER file's namespace
+    // (native transforms registered before this loop, or stripped aliases
+    // registered a few lines below), never into a nested source prefab's
+    // internal fileID space — and the projection below skips any fileID
+    // already present in the outer map, so pre-existing OUTER entries win.
     if (sourcePrefab) {
       const srcOrder: GameObjectNode[] = [];
       const cloneOrder: GameObjectNode[] = [];
@@ -718,7 +729,9 @@ export async function buildGameObjectTree(
     // targeting `{fileID: 9165011913175360982, guid: Blue}`) would miss
     // entirely. These aliases ARE authoritative and safe to always overwrite
     // with — they encode the outer prefab's chosen identity for the nested
-    // instance.
+    // instance. Doing this in Pass A means every subsequent PrefabInstance's
+    // parent lookup in Pass B can resolve parent refs that target this root
+    // regardless of document order.
     const aliasXformId = strippedXformByInstanceId.get(d.header.fileID);
     if (aliasXformId) byTransformFileID.set(aliasXformId, prefabNode);
     const aliasGoId = strippedGoByInstanceId.get(d.header.fileID);
@@ -738,6 +751,28 @@ export async function buildGameObjectTree(
     if (corrGoId && !byGOFileID.has(corrGoId)) {
       byGOFileID.set(corrGoId, prefabNode);
     }
+
+    const parentId = fileIdOf(mod['m_TransformParent']);
+    pendingPrefabAttach.push({
+      prefabNode,
+      parentId: parentId || undefined,
+    });
+  }
+
+  // Pass B: every PrefabInstance's stripped aliases are now registered, so
+  // parent references resolve regardless of document order. Attach to the
+  // resolved parent, or fall through to `roots` when the parent is the scene
+  // root (m_TransformParent = 0) or genuinely unresolvable.
+  for (const pending of pendingPrefabAttach) {
+    const { prefabNode, parentId } = pending;
+    if (parentId) {
+      const parent = byTransformFileID.get(parentId);
+      if (parent) {
+        parent.children.push(prefabNode);
+        continue;
+      }
+    }
+    roots.push(prefabNode);
   }
 
   // --- Orphaned native transform rescue pass ----------------------------
@@ -1604,11 +1639,12 @@ async function applyPrefabRemovedGameObjects(
   // rendering correctly (the scene says "drop the 4 decorative cliff
   // sub-prefabs and keep just the tower root" but we can't find any of
   // the 5 fileIDs anywhere). Fall back to a count-matched heuristic: if
-  // the unresolved removal count equals the cloned root's current child
-  // count AND every entry failed to resolve through the direct maps, the
-  // scene almost certainly wants all of those PrefabInstance-added
-  // children gone. Applying it wholesale here mirrors what Unity ends up
-  // doing at runtime without requiring us to implement SpookyHashV2.
+  // the unresolved removal count is at least the cloned root's current
+  // child count AND every entry failed to resolve through the direct
+  // maps, the scene almost certainly wants all of those
+  // PrefabInstance-added children gone. Applying it wholesale here mirrors
+  // what Unity ends up doing at runtime without requiring us to
+  // implement SpookyHashV2.
   //
   // Safety rails:
   //   - Only fires when `detached === 0 && submeshSkipped === 0`, i.e.
@@ -1621,6 +1657,12 @@ async function applyPrefabRemovedGameObjects(
   //     trees have enough fileID stability on disk that a total miss
   //     usually means the targets are deeper than one hop, and blanket-
   //     removing children there would delete real hierarchy.
+  //   - Allows `missedRemovals >= clonedRoot.children.length` rather than
+  //     strict equality: composite prefabs (e.g. DM_EV_A.prefab) reference
+  //     nested prefab assets that can be missing from disk, which leaves
+  //     our cloned tree with fewer children than the scene's removal
+  //     list enumerates. Strict equality would miss this case and the
+  //     prop would still render with its wrong geometry visible.
   let heuristicDetached = 0;
   if (
     prefabInfo.isModelPrefab &&
@@ -1628,19 +1670,23 @@ async function applyPrefabRemovedGameObjects(
     submeshSkipped === 0 &&
     missedRemovals > 0 &&
     clonedRoot.children.length > 0 &&
-    missedRemovals === clonedRoot.children.length
+    missedRemovals >= clonedRoot.children.length
   ) {
     heuristicDetached = clonedRoot.children.length;
     clonedRoot.children = [];
   }
 
+
   if (
     removedRaw.length > 0 &&
     (detached > 0 || submeshSkipped > 0 || missedRemovals > 0 || heuristicDetached > 0)
   ) {
+    const childCountAfter =
+      heuristicDetached > 0 ? 0 : clonedRoot.children.length;
     console.log(
       `[prefabRemove] root='${clonedRoot.name}' entries=${removedRaw.length} ` +
-        `detached=${detached} submeshSkipped=${submeshSkipped} miss=${missedRemovals}` +
+        `detached=${detached} submeshSkipped=${submeshSkipped} miss=${missedRemovals} ` +
+        `children=${childCountAfter} isModel=${prefabInfo.isModelPrefab}` +
         (heuristicDetached > 0 ? ` heuristicDetached=${heuristicDetached}` : ''),
     );
   }
