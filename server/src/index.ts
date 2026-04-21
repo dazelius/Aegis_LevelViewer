@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
-import { bundleMode, config } from './config.js';
+import { bundleMode, config, getRepo2LocalDir } from './config.js';
 import { syncUnityRepo } from './git/gitSync.js';
 import { assetIndex } from './unity/assetIndex.js';
 import { bundleIndex } from './bundle/bundleIndex.js';
@@ -121,11 +121,39 @@ async function bootstrap(): Promise<void> {
       if (bundleMode) {
         await bundleIndex.load();
       } else {
-        const result = await syncUnityRepo();
-        console.log(
-          `[server] git sync: ${result.action}${result.head ? ` @ ${result.head}` : ''}`,
-        );
-        await assetIndex.build();
+        // If the repo already exists on disk (warm deploy / restart),
+        // build the asset index FIRST so the server can serve scenes
+        // immediately, then sync in the background. This avoids the
+        // multi-minute LFS fetch blocking every request on startup.
+        const repoDir = getRepo2LocalDir();
+        const repoExists = fs.existsSync(path.join(repoDir, '.git'));
+
+        if (repoExists) {
+          console.log('[server] repo already on disk — building asset index first, syncing in background');
+          await assetIndex.build();
+          // Fire-and-forget: sync will update the repo and rebuild
+          // the index when done, picking up any upstream changes.
+          syncUnityRepo()
+            .then(async (result) => {
+              console.log(
+                `[server] background git sync: ${result.action}${result.head ? ` @ ${result.head}` : ''}`,
+              );
+              await assetIndex.build();
+              console.log('[server] asset index rebuilt after sync');
+            })
+            .catch((err) => {
+              console.warn('[server] background sync error (non-fatal):', err);
+            });
+        } else {
+          // Cold start: no repo at all — must clone + fetch text LFS
+          // before we can build the index. This is the slow path but
+          // only happens on the very first deploy.
+          const result = await syncUnityRepo();
+          console.log(
+            `[server] git sync: ${result.action}${result.head ? ` @ ${result.head}` : ''}`,
+          );
+          await assetIndex.build();
+        }
       }
     } catch (err) {
       console.error('[server] bootstrap error:', err);
