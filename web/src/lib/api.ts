@@ -259,8 +259,12 @@ export async function fetchScene(relPath: string): Promise<SceneJson | UnityExpo
   // the scene `.unity` is still a Git LFS pointer and a background fetch
   // is in flight; polling gives it time to land on disk without blowing
   // the platform's reverse-proxy timeout (~30 s) that would otherwise
-  // surface as a 502 to the user.
-  const MAX_ATTEMPTS = 12;
+  // surface as a 502 to the user. Budget is generous (~75 s total) so
+  // the very first request after a cold deploy — which may need to
+  // wait for a fresh LFS download AND for the repo-level URL-rewrite
+  // config to get applied — still has a chance to finish on the
+  // user's first click instead of bouncing them to an error page.
+  const MAX_ATTEMPTS = 30;
   const RETRY_DELAY_MS = 2500;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     const res = await fetch(url);

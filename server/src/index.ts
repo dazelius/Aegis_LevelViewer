@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import { bundleMode, config, getRepo2LocalDir } from './config.js';
-import { syncUnityRepo } from './git/gitSync.js';
+import { applyUrlRewritesToRepo, syncUnityRepo } from './git/gitSync.js';
 import { assetIndex } from './unity/assetIndex.js';
 import { bundleIndex } from './bundle/bundleIndex.js';
 import { apiRouter } from './api/routes.js';
@@ -77,6 +77,27 @@ async function bootstrap(): Promise<void> {
     app.get('/', (_req, res) => {
       res.type('text/plain').send('Aegisgram server. See /api/health');
     });
+  }
+
+  // Apply URL rewrites to the existing repo's local config BEFORE we
+  // start accepting HTTP traffic. Even if the async bootstrap below
+  // also calls this, the first /api/levels/* request could land
+  // between `httpServer.listen()` and the bootstrap resolving — which
+  // would trigger a lazyLfs fetch using the PRE-rewrite config and
+  // blow 90 s hitting an unreachable LFS host, well past the
+  // client's retry budget. This synchronous pre-flight guarantees
+  // the rewrite is live the instant we bind the port. Cheap (a few
+  // `git config` calls) and safe — skipped entirely if the repo
+  // doesn't exist yet (cold clone takes care of it).
+  if (!bundleMode) {
+    const repoDir = getRepo2LocalDir();
+    if (fs.existsSync(path.join(repoDir, '.git'))) {
+      try {
+        await applyUrlRewritesToRepo(repoDir);
+      } catch (err) {
+        console.warn('[server] pre-listen applyUrlRewritesToRepo error (non-fatal):', err);
+      }
+    }
   }
 
   // Manually create the HTTP server so the multiplayer WebSocket

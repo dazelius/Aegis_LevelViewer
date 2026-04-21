@@ -20,6 +20,10 @@ import {
  * automatically, which is what unblocks LFS fetches when the
  * batch API hands out an unreachable download host.
  */
+export async function applyUrlRewritesToRepo(repoDir: string): Promise<void> {
+  return persistUrlRewritesInRepo(repoDir);
+}
+
 async function persistUrlRewritesInRepo(repoDir: string): Promise<void> {
   const rewrites = getGitUrlRewrites();
   if (rewrites.length === 0) return;
