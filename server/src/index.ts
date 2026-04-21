@@ -4,8 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
-import { bundleMode, config, getRepo2LocalDir } from './config.js';
+import { bundleMode, config, getRepo2LocalDir, getGitUrlRewrites } from './config.js';
 import { applyUrlRewritesToRepo, syncUnityRepo } from './git/gitSync.js';
+import { startLfsProxy } from './git/lfsProxy.js';
 import { assetIndex } from './unity/assetIndex.js';
 import { bundleIndex } from './bundle/bundleIndex.js';
 import { apiRouter } from './api/routes.js';
@@ -79,17 +80,20 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  // Apply URL rewrites to the existing repo's local config BEFORE we
-  // start accepting HTTP traffic. Even if the async bootstrap below
-  // also calls this, the first /api/levels/* request could land
-  // between `httpServer.listen()` and the bootstrap resolving — which
-  // would trigger a lazyLfs fetch using the PRE-rewrite config and
-  // blow 90 s hitting an unreachable LFS host, well past the
-  // client's retry budget. This synchronous pre-flight guarantees
-  // the rewrite is live the instant we bind the port. Cheap (a few
-  // `git config` calls) and safe — skipped entirely if the repo
-  // doesn't exist yet (cold clone takes care of it).
+  // Boot the local LFS proxy FIRST (if any rewrites are configured),
+  // then persist both `url.<to>.insteadOf` and `http.<from>.proxy`
+  // into the repo's local git config — all synchronously, before
+  // `httpServer.listen()` accepts traffic. The proxy's port is only
+  // known after it binds, and `persistUrlRewritesInRepo` reads it
+  // via `getLfsProxyInfo()` to wire up the `http.<URL>.proxy` keys
+  // that actually fix the LFS object-download path (see lfsProxy.ts
+  // for the full rationale — `insteadOf` alone doesn't cover that).
   if (!bundleMode) {
+    try {
+      await startLfsProxy(getGitUrlRewrites());
+    } catch (err) {
+      console.warn('[server] pre-listen startLfsProxy error (non-fatal):', err);
+    }
     const repoDir = getRepo2LocalDir();
     if (fs.existsSync(path.join(repoDir, '.git'))) {
       try {

@@ -9,6 +9,7 @@ import {
   getRepo2LocalDir,
   getSparsePaths,
 } from '../config.js';
+import { getLfsProxyInfo } from './lfsProxy.js';
 
 /**
  * Persist `AEGISGRAM_GIT_URL_REWRITES` into the local repo's
@@ -41,6 +42,34 @@ async function persistUrlRewritesInRepo(repoDir: string): Promise<void> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`[gitSync] failed to persist url rewrite ${key}: ${msg}`);
+    }
+  }
+
+  // insteadOf covers `git fetch/push/clone` transport but NOT the
+  // absolute object-download URLs that git-lfs receives from the
+  // batch API response. For those we route the specific URL prefix
+  // through an in-process HTTP forward proxy (see lfsProxy.ts) by
+  // setting `http.<URL>.proxy`. git-lfs honours per-URL proxy config,
+  // so every object href starting with `<from>` gets delivered by
+  // our proxy after being forwarded to the reachable `<to>` host.
+  const proxy = getLfsProxyInfo();
+  if (proxy) {
+    const proxyUrl = `http://127.0.0.1:${proxy.port}`;
+    for (const { from } of rewrites) {
+      const key = `http.${from}.proxy`;
+      try {
+        await inner.raw(['config', '--local', '--unset-all', key]).catch(() => {});
+        await inner.raw(['config', '--local', '--add', key, proxyUrl]);
+        // Make sure git doesn't leak a system-wide no_proxy that
+        // happens to match 127.0.0.1 or the `<from>` host and bypass
+        // our proxy. `http.<URL>.noProxy=*` as a *negated* entry is
+        // not a thing, but leaving it unset means git uses env vars;
+        // we set `emptyProxy` to false defensively.
+        console.log(`[gitSync] persisted lfs proxy: ${key}=${proxyUrl}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[gitSync] failed to persist lfs proxy ${key}: ${msg}`);
+      }
     }
   }
 }
