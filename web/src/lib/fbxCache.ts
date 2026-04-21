@@ -261,16 +261,34 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
   };
 
   const url = apiUrl(`/api/assets/mesh?guid=${encodeURIComponent(guid)}`);
-  let res: Response;
-  try {
-    res = await fetch(url);
-  } catch (err) {
-    return settle(empty('error', (err as Error).message));
+
+  // 409 from the server means "this is still an LFS pointer — retry
+  // shortly". The server triggers a background `git lfs fetch` the
+  // moment the scene is opened, so the blob is usually on disk within
+  // a few seconds. Retry a handful of times with linear backoff before
+  // falling through to the placeholder. This is what makes the viewer
+  // usable on platform deploys where LFS download happens lazily: the
+  // first scene-open request is "primed" by the time the client loops
+  // back for the FBX a second time.
+  const MAX_LFS_RETRIES = 6;
+  const LFS_RETRY_MS = 2500;
+  let res: Response | null = null;
+  for (let attempt = 0; attempt <= MAX_LFS_RETRIES; attempt += 1) {
+    try {
+      res = await fetch(url);
+    } catch (err) {
+      return settle(empty('error', (err as Error).message));
+    }
+    if (res.status !== 409) break;
+    if (attempt === MAX_LFS_RETRIES) break;
+    await new Promise<void>((r) => setTimeout(r, LFS_RETRY_MS));
+  }
+  if (!res) {
+    return settle(empty('error', 'no response'));
   }
 
   if (res.status === 409) {
-    // Server told us this asset is an unresolved Git LFS pointer.
-    return settle(empty('lfs-pointer', 'LFS fetch not enabled'));
+    return settle(empty('lfs-pointer', 'LFS fetch timed out after retries'));
   }
   if (!res.ok) {
     return settle(empty('missing', `HTTP ${res.status}`));

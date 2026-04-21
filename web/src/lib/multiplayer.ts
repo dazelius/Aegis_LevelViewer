@@ -76,6 +76,15 @@ let announcedScene = ''; // last scene we told the server about
 let helloSent = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 500; // grows up to 10s
+/** Consecutive connect failures without a successful `open`. After
+ *  MAX_RECONNECT_ATTEMPTS we give up and stop reconnecting — the
+ *  deployment's reverse proxy likely does not support WebSocket
+ *  upgrades (common for iframe-proxy platforms), and infinite retries
+ *  just spam the user's console with red `ws error` lines. Multiplayer
+ *  is a best-effort feature; the viewer works fine without it. */
+let consecutiveFailures = 0;
+let reconnectDisabled = false;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 /** Last-seen state of every peer in the current room (excluding self). */
 const peers = new Map<string, Peer>();
@@ -182,12 +191,18 @@ export function ensureConnected(): void {
   ws.addEventListener('open', onOpen);
   ws.addEventListener('message', onMessage);
   ws.addEventListener('close', onClose);
-  ws.addEventListener('error', (e) => {
-    console.warn('[multiplayer] ws error:', e);
+  ws.addEventListener('error', () => {
+    // Intentionally quiet — infrastructure with no WS support (e.g. a
+    // platform reverse proxy that strips `Upgrade: websocket`) fires
+    // one of these for every single connect attempt. Logging each one
+    // just pollutes the console. The close handler below schedules a
+    // capped retry and eventually gives up, which is what the user
+    // actually needs to know.
   });
 }
 
 function scheduleReconnect(): void {
+  if (reconnectDisabled) return;
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -198,6 +213,7 @@ function scheduleReconnect(): void {
 
 function onOpen(): void {
   reconnectDelay = 500;
+  consecutiveFailures = 0;
   sendHello();
 }
 
@@ -211,6 +227,24 @@ function onClose(): void {
     notifyPeers();
   }
   ws = null;
+
+  // If we never reached `onOpen` (selfId stayed null / helloSent never
+  // flipped true), the close was a failed handshake — count it. After
+  // a handful of these we stop trying. This catches the common case of
+  // a reverse-proxy that doesn't honour the WebSocket Upgrade header:
+  // the client endlessly opens and fails, each spewing a red console
+  // error. We'd rather log once and be quiet.
+  consecutiveFailures += 1;
+  if (consecutiveFailures >= MAX_RECONNECT_ATTEMPTS) {
+    reconnectDisabled = true;
+    console.warn(
+      `[multiplayer] giving up after ${consecutiveFailures} failed ` +
+        'connect attempts. This deployment likely does not support ' +
+        'WebSocket upgrades; multiplayer (live feedback sync, co-viewing) ' +
+        'is disabled. Scene viewing and feedback posting still work.',
+    );
+    return;
+  }
   scheduleReconnect();
 }
 

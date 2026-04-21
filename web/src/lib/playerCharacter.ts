@@ -138,10 +138,25 @@ const fbxLoader = new FBXLoader();
  */
 async function fetchFbxGroup(guid: string): Promise<THREE.Group> {
   const url = apiUrl(`/api/assets/mesh?guid=${encodeURIComponent(guid)}`);
-  const res = await fetch(url);
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`fetch FBX ${guid} failed: ${res.status} ${res.statusText} ${body}`);
+  // Retry on 409 (server-side LFS fetch still in flight) with linear
+  // backoff. Matches the fbxCache.ts strategy — on a freshly-deployed
+  // platform, lazy LFS pulls the blob within a few seconds of the
+  // scene opening, and without the retry the very first character
+  // model fails permanently and falls back to a capsule.
+  const MAX_LFS_RETRIES = 6;
+  const LFS_RETRY_MS = 2500;
+  let res: Response | null = null;
+  for (let attempt = 0; attempt <= MAX_LFS_RETRIES; attempt += 1) {
+    res = await fetch(url);
+    if (res.status !== 409) break;
+    if (attempt === MAX_LFS_RETRIES) break;
+    await new Promise<void>((r) => setTimeout(r, LFS_RETRY_MS));
+  }
+  if (!res || !res.ok) {
+    const body = res ? await res.text().catch(() => '') : '';
+    throw new Error(
+      `fetch FBX ${guid} failed: ${res?.status ?? 0} ${res?.statusText ?? 'no response'} ${body}`,
+    );
   }
   const buf = await res.arrayBuffer();
   // `parse` takes the raw buffer + a base path for external texture
