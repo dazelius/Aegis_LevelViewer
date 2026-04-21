@@ -16,8 +16,10 @@ interface HealthResponse {
   mode: ServerMode;
 }
 
-/** Shape returned by `/api/lfs-status` — matches the server's
- *  `BulkProgress` interface in `lazyLfs.ts`. */
+/** Shape returned by `/api/lfs-status`. Combines two pieces of state:
+ *  the root fields describe the bulk `.mat` + image prefetch (from
+ *  `lazyLfs.BulkProgress`), and `sync` describes the in-flight manual
+ *  Git Sync (from the server's `SyncState`). */
 interface LfsStatus {
   running: boolean;
   total: number;
@@ -25,6 +27,14 @@ interface LfsStatus {
   filesDone: number;
   startedAt?: number;
   lastError?: string;
+  sync?: {
+    running: boolean;
+    startedAt?: number;
+    finishedAt?: number;
+    action?: string;
+    head?: string;
+    error?: string;
+  };
 }
 
 export default function App() {
@@ -70,12 +80,12 @@ export default function App() {
     };
   }, []);
 
-  // Poll the bulk-LFS prefetch progress while we're in live mode. We
-  // back off to 10 s when no run is active and tighten to 2 s while
-  // one is in flight — covers both the "server just started, big
-  // prefetch running" case and "user clicked Git Sync, wait for the
-  // secondary prefetch" case without hammering the endpoint in the
-  // quiet steady-state.
+  // Poll /api/lfs-status while we're in live mode. We tighten to 2 s
+  // whenever either piece of state is active (bulk prefetch OR a Git
+  // Sync) and back off to 10 s when everything's quiet. Covers
+  // cold-start, post-sync, and "user just clicked Git Sync and the
+  // 504-proof fire-and-forget handler returned 202" cases without
+  // hammering the endpoint in the steady-state.
   useEffect(() => {
     if (mode !== 'live') return undefined;
     let cancelled = false;
@@ -86,7 +96,8 @@ export default function App() {
         const s = await apiGet<LfsStatus>('/api/lfs-status');
         if (cancelled) return;
         setLfsStatus(s);
-        const delay = s.running ? 2000 : 10_000;
+        const active = s.running || s.sync?.running === true;
+        const delay = active ? 2000 : 10_000;
         timeoutId = window.setTimeout(poll, delay);
       } catch {
         if (cancelled) return;
@@ -103,25 +114,31 @@ export default function App() {
     };
   }, [mode]);
 
+  // Track the running sync via /api/lfs-status.sync so the button
+  // stays "Syncing…" for as long as the real work takes, not just
+  // the 202-return round-trip. This flips from the local `syncing`
+  // flag (controlled by `handleSync`) to the server-reported flag
+  // once the first poll lands, so the two are effectively OR'd.
+  const syncActive = syncing || lfsStatus?.sync?.running === true;
+
   async function handleSync() {
-    if (syncing) return;
+    if (syncActive) return;
     setSyncing(true);
     try {
+      // The server now runs sync asynchronously and returns 202
+      // immediately (true sync can exceed every HTTP proxy's timeout;
+      // the old blocking endpoint was showing up as 504 Gateway
+      // Time-out). We don't await the whole sync — we just kick it
+      // off and let the /api/lfs-status poller above drive the UI.
       await apiPost('/api/sync');
-      // Don't reload the whole app — keep the user's scene list /
-      // viewer state and just nudge the LFS-status poller so the
-      // post-sync bulk prefetch badge appears promptly. A full
-      // reload was the old hammer that also nuked the multiplayer
-      // socket and any in-progress scene load.
-      try {
-        const s = await apiGet<LfsStatus>('/api/lfs-status');
-        setLfsStatus(s);
-      } catch {
-        // ignore — the poller will catch up on its next tick
-      }
+      const s = await apiGet<LfsStatus>('/api/lfs-status');
+      setLfsStatus(s);
     } catch (err) {
       alert(`Sync failed: ${(err as Error).message}`);
     } finally {
+      // Drop the local flag — from here on `syncActive` is driven by
+      // `lfsStatus.sync.running`, which stays true until the
+      // background sync completes on the server.
       setSyncing(false);
     }
   }
@@ -211,6 +228,26 @@ export default function App() {
           </span>
         )}
         {/*
+          Manual Git Sync progress. Separate from the bulk prefetch
+          badge below because sync is "git pull + reset + index
+          rebuild" (serial, can't be parallelised usefully) while
+          prefetch is "download N LFS blobs" (countable). Rendering
+          them as two distinct pills keeps the semantics clear.
+        */}
+        {mode === 'live' && lfsStatus?.sync?.running && (
+          <span
+            className="lfs-prefetch-badge"
+            title={
+              '서버에서 Git pull + reset + 에셋 인덱스 재구성을 ' +
+              '실행 중입니다. 완료되면 자동으로 재질/텍스처 일괄 ' +
+              '다운로드가 이어집니다.'
+            }
+          >
+            <span className="lfs-prefetch-spinner" aria-hidden="true" />
+            <span className="lfs-prefetch-text">Syncing…</span>
+          </span>
+        )}
+        {/*
           Bulk LFS prefetch progress. Shown while the server is
           downloading `.mat` + image pointers in the background —
           either right after startup or after a Git Sync click.
@@ -251,8 +288,8 @@ export default function App() {
           confusing error when clicked.
         */}
         {mode === 'live' && (
-          <button type="button" onClick={handleSync} disabled={syncing}>
-            {syncing ? 'Syncing...' : 'Git Sync'}
+          <button type="button" onClick={handleSync} disabled={syncActive}>
+            {syncActive ? 'Syncing…' : 'Git Sync'}
           </button>
         )}
       </header>

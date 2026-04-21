@@ -995,7 +995,24 @@ const PLACEHOLDER_PNG = Buffer.from(
   'base64',
 );
 
-apiRouter.post('/sync', async (_req: Request, res: Response) => {
+// Module-level tracking of the in-flight / last Git Sync. A sync can
+// legitimately take 1–5 min (pull + reset + index rebuild + LFS
+// prefetch), which blows past every HTTP reverse-proxy timeout we're
+// likely to sit behind (nginx defaults to 60 s, the platform proxy
+// killed us at ~30 s with a 504). So we treat /api/sync as a
+// fire-and-forget trigger: start the work, return immediately, and
+// let the client poll /api/lfs-status to see when it's done.
+interface SyncState {
+  running: boolean;
+  startedAt?: number;
+  finishedAt?: number;
+  action?: string;
+  head?: string;
+  error?: string;
+}
+let syncState: SyncState = { running: false };
+
+apiRouter.post('/sync', (_req: Request, res: Response) => {
   // In bundle mode the server never contacts the upstream Unity repo —
   // the content is baked at build time and `git lfs pull` on deploy is
   // the only "sync" operation that matters. Reflect that explicitly.
@@ -1003,30 +1020,59 @@ apiRouter.post('/sync', async (_req: Request, res: Response) => {
     res.status(501).json({ error: 'sync is disabled in bundle mode' });
     return;
   }
-  try {
-    const result = await syncUnityRepo({ force: true });
-    // Rebuild index after pull.
-    await assetIndex.build();
-    // Re-run the bulk `.mat` + image prefetch so any new / changed
-    // pointers introduced by the sync get downloaded in one pass
-    // rather than piecemeal as the user navigates. Fire-and-forget:
-    // the sync response returns immediately and the client polls
-    // /api/lfs-status to track progress.
-    bulkFetchMaterialsAndTextures(getRepo2LocalDir(), assetIndex).catch((err) => {
-      console.warn('[server] post-sync bulk LFS prefetch error (non-fatal):', err);
-    });
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+  if (syncState.running) {
+    // Idempotent: don't stack concurrent syncs. The client is polling
+    // status anyway so "already running" is the right answer.
+    res.status(202).json({ ...syncState, queued: false });
+    return;
   }
+
+  syncState = { running: true, startedAt: Date.now() };
+  res.status(202).json({ ...syncState, queued: true });
+
+  // Fire-and-forget. Any error is captured into syncState so the UI
+  // can surface it on the next /api/lfs-status poll; never rethrown
+  // past this boundary.
+  (async () => {
+    try {
+      const result = await syncUnityRepo({ force: true });
+      console.log(
+        `[server] manual sync: ${result.action}${result.head ? ` @ ${result.head}` : ''}`,
+      );
+      await assetIndex.build();
+      syncState = {
+        ...syncState,
+        running: false,
+        finishedAt: Date.now(),
+        action: result.action,
+        head: result.head,
+      };
+      // Re-run the bulk `.mat` + image prefetch so any new / changed
+      // pointers introduced by the sync get downloaded in one pass.
+      bulkFetchMaterialsAndTextures(getRepo2LocalDir(), assetIndex).catch((err) => {
+        console.warn('[server] post-sync bulk LFS prefetch error (non-fatal):', err);
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('[server] manual sync failed:', message);
+      syncState = {
+        ...syncState,
+        running: false,
+        finishedAt: Date.now(),
+        error: message,
+      };
+    }
+  })();
 });
 
 /**
- * Current state of the background `.mat` + image bulk LFS prefetch.
- * Client polls this while a run is active to render a header badge
- * like "Assets: 450 / 1200" so the user understands why some scenes
- * still show magenta surfaces right after a cold deploy or a Git
- * Sync — and can see the remaining work draining in real time.
+ * Current state of the background `.mat` + image bulk LFS prefetch
+ * AND the manual Git Sync. Client polls this to render a header
+ * badge ("Syncing…" / "Assets 450 / 1200") so the user understands
+ * why some scenes still show magenta surfaces right after a cold
+ * deploy or a Git Sync click — and can see the remaining work
+ * draining in real time. Combining both pieces of state in one
+ * endpoint keeps the client's polling overhead minimal.
  */
 apiRouter.get('/lfs-status', (_req: Request, res: Response) => {
   if (bundleMode) {
@@ -1034,8 +1080,14 @@ apiRouter.get('/lfs-status', (_req: Request, res: Response) => {
     // that care about this endpoint are always live-mode clients, but
     // we still return a well-formed stub so the UI code path is
     // uniform.
-    res.json({ running: false, total: 0, done: 0, filesDone: 0 });
+    res.json({
+      running: false,
+      total: 0,
+      done: 0,
+      filesDone: 0,
+      sync: { running: false },
+    });
     return;
   }
-  res.json(getBulkPrefetchProgress());
+  res.json({ ...getBulkPrefetchProgress(), sync: syncState });
 });
