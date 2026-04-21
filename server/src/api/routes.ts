@@ -191,11 +191,27 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
     return;
   }
 
+  // If the scene file itself is still a Git LFS pointer (typical on a
+  // freshly-cloned platform deploy where the bulk LFS fetch was
+  // skipped), materialise it on demand before parsing. parseScene on a
+  // 130-byte pointer produces an empty tree; this ensures the parser
+  // sees the real YAML bytes.
+  const repoDir = getRepo2LocalDir();
+  try {
+    const head = await fs.readFile(absPath);
+    if (isLfsPointerBuf(head)) {
+      console.log(`[lazyLfs] scene file is a pointer — fetching ${relPath} before parse`);
+      await ensureLfsFile(absPath, repoDir);
+    }
+  } catch {
+    // Non-fatal — parseScene below will surface a clearer error.
+  }
+
   // Kick off a background LFS fetch for every binary asset this scene
   // references that is still a pointer on disk. Does not block the scene
   // response — the JSON is returned immediately and Three.js starts
   // rendering while the downloads race the browser render pipeline.
-  triggerLazyLfsForScene(absPath, getRepo2LocalDir());
+  triggerLazyLfsForScene(absPath, repoDir);
 
   try {
     const parsed = await parseScene(absPath, relPath);

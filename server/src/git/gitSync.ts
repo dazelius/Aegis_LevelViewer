@@ -201,19 +201,26 @@ async function runLfsFetchBatch(
 }
 
 async function fetchLfsAssets(targetDir: string): Promise<void> {
+  // Fully skip LFS fetch when AEGISGRAM_FORCE_LIVE is set — lazyLfs.ts
+  // handles both text (.unity / .mat / .prefab) and binary assets on
+  // demand at request time, so there's no benefit to a bulk pull at
+  // startup/sync. This is the fast path for warm restarts: the repo is
+  // already on disk, the compiled indexes cover everything we need,
+  // and any pointer file gets materialised when its scene is opened.
+  if ((process.env.AEGISGRAM_FORCE_LIVE || '').toLowerCase() === 'true') {
+    console.log('[gitSync] AEGISGRAM_FORCE_LIVE=true — skipping bulk LFS fetch (lazy LFS covers on-demand)');
+    return;
+  }
+
   const lfsGit = simpleGit(targetDir).env({
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
   attachGitStreamLogger(lfsGit);
 
-  // When the server has lazy LFS (lazyLfs.ts) available, we only need
-  // text assets (.unity, .mat, .prefab, …) at startup — binary blobs
-  // (textures, meshes) are fetched on demand when a scene is opened.
-  // The `LEVEL_VIEWER_LFS_STARTUP` env var controls startup behaviour:
-  //   'text-only' (default when lazy LFS exists) — fast startup, ~1 min
-  //   'full' — legacy behaviour, all 17 batches, 20-40 min
-  // config.gitFetchLfs still gates whether we fetch anything beyond the
-  // text baseline at all (when false, BINARY_EXTS are never touched).
+  // Legacy path (when not in force-live mode): do the full/text-only
+  // batch fetch. LEVEL_VIEWER_LFS_STARTUP selects between:
+  //   'text-only' — fast startup, ~1 min, 7 batches
+  //   'full'      — legacy behaviour, all 17 batches, 20-40 min
   const startupMode =
     (process.env.LEVEL_VIEWER_LFS_STARTUP || '').toLowerCase() === 'full'
       ? 'full'
