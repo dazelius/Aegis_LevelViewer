@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchLevels, type SceneCategory, type SceneListItem } from '../lib/api';
+import { fetchLevels, warmLevel, type SceneCategory, type SceneListItem } from '../lib/api';
 import { fetchAllFeedbacks, type Feedback } from '../lib/feedbackStore';
 import { subscribeFeedbackEvents } from '../lib/multiplayer';
 
@@ -336,8 +336,20 @@ function SceneFilterChip({
 function SceneTile({ scene }: { scene: SceneSummary }) {
   const href = `/level/${scene.relPath.split('/').map(encodeURIComponent).join('/')}`;
   const folder = sceneFolder(scene.relPath);
+  // Fire the warm-up hint the moment the user might be about to open
+  // this scene. We listen on both pointer-enter (mouse) and focus
+  // (keyboard navigation) so either interaction triggers the same
+  // background LFS fetch. The server dedupes concurrent hovers.
+  const warm = () => warmLevel(scene.relPath);
   return (
-    <Link to={href} className="scene-tile" title={scene.relPath}>
+    <Link
+      to={href}
+      className="scene-tile"
+      title={scene.relPath}
+      onPointerEnter={warm}
+      onFocus={warm}
+      onTouchStart={warm}
+    >
       <div className="scene-tile-thumb-wrap">
         {scene.thumbnail ? (
           <img

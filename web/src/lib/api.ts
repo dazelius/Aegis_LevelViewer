@@ -250,6 +250,31 @@ export async function fetchLevels(): Promise<SceneListItem[]> {
 }
 
 /**
+ * Hint to the server that the user is about to open a scene — typically
+ * fired on hover / focus of a thumbnail in the list view. The server
+ * starts streaming the scene YAML + its LFS-tracked dependencies into
+ * cache in the background so the actual click lands against warm data.
+ *
+ * Best-effort: aborts silently on any network / server error, never
+ * retries, and is deliberately a fire-and-forget `fetch` (we throw
+ * away the promise instead of awaiting). Multiple hover events for
+ * the same scene collapse to one batch inside the server's lazyLfs
+ * deduplication layer.
+ */
+export function warmLevel(relPath: string): void {
+  if (!relPath) return;
+  const encoded = relPath.split('/').map(encodeURIComponent).join('/');
+  const url = apiUrl(`/api/levels/${encoded}/warm`);
+  // We don't `await` and don't `.catch()` because `fetch`'s rejection
+  // is already unhandled — browsers will log it but not break UX.
+  try {
+    void fetch(url, { method: 'POST', keepalive: true });
+  } catch {
+    // Ignore; warming is purely an optimisation
+  }
+}
+
+/**
  * Progress update emitted by `fetchScene` while the server is still
  * pulling the scene's LFS blob. `phase` is 'requesting' while the HTTP
  * call is in flight and 'waiting' during the inter-attempt sleep.

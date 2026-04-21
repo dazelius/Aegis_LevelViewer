@@ -33,9 +33,17 @@ export async function applyUrlRewritesToRepo(repoDir: string): Promise<void> {
  * on every pull. Writes a sentinel so we only pay the config cost
  * once per clone.
  */
+// Bump this whenever the perf config entries change so that existing
+// clones re-apply on next boot instead of relying on a stale sentinel.
+const PERF_CONFIG_VERSION = 'v2-lfs-concurrent';
+
 async function applyRepoPerfConfig(repoDir: string): Promise<void> {
   const sentinel = path.join(repoDir, '.git', '.aegis-perf-applied');
-  if (fs.existsSync(sentinel)) return;
+  try {
+    if (fs.readFileSync(sentinel, 'utf8').includes(PERF_CONFIG_VERSION)) return;
+  } catch {
+    // missing or unreadable sentinel — fall through and (re)apply
+  }
   const inner = simpleGit(repoDir).env({ GIT_TERMINAL_PROMPT: '0' } as Record<string, string>);
   const entries: Array<[string, string]> = [
     // Untracked-cache + fsmonitor dramatically speed up `git status`
@@ -47,6 +55,18 @@ async function applyRepoPerfConfig(repoDir: string): Promise<void> {
     // Bundles many-file-friendly defaults: larger pack window, reduced
     // index writes. Safe on all platforms.
     ['feature.manyFiles', 'true'],
+    // LFS transport tuning. `concurrenttransfers` defaults to 3, which
+    // leaves a fast internal endpoint massively underutilised — on our
+    // rewrite target (~172.31.x.x) we can pin ~16 concurrent object
+    // downloads with no ill effect, and overall wall-clock of bulk
+    // prefetch drops roughly linearly until the network is saturated.
+    // `fetchrecentrefsdays=0` turns off git-lfs's built-in "also fetch
+    // recent refs" background prefetch, which we don't need because
+    // lazyLfs is explicit about what it wants.
+    ['lfs.concurrenttransfers', '16'],
+    ['lfs.fetchrecentrefsdays', '0'],
+    ['lfs.fetchrecentcommitsdays', '0'],
+    ['lfs.pruneoffsetdays', '14'],
     // NB: we deliberately do NOT disable the lfs smudge filter via
     // `filter.lfs.smudge`. The GIT_LFS_SKIP_SMUDGE env we set in
     // pullSparse already handles checkout, and our lazyLfs codepath
@@ -62,8 +82,11 @@ async function applyRepoPerfConfig(repoDir: string): Promise<void> {
     }
   }
   try {
-    fs.writeFileSync(sentinel, new Date().toISOString());
-    console.log('[gitSync] applied perf config (fsmonitor, untrackedCache, lfs-skip)');
+    fs.writeFileSync(sentinel, `${PERF_CONFIG_VERSION}\n${new Date().toISOString()}\n`);
+    console.log(
+      `[gitSync] applied perf config (${PERF_CONFIG_VERSION}): ` +
+        'fsmonitor, untrackedCache, lfs.concurrenttransfers=16',
+    );
   } catch {
     // sentinel is just an optimisation — if it can't be written we just
     // re-apply next time, which is idempotent anyway.
@@ -172,6 +195,14 @@ export interface SyncResult {
   localDir: string;
   head?: string;
   message?: string;
+  /**
+   * Files that changed between the pre-sync HEAD and the post-sync HEAD.
+   * Populated only on a "pulled" action when the remote advanced; empty
+   * on clone (the asset index build covers that case) and on no-op
+   * pulls. Paths are repo-relative with forward slashes — ready to feed
+   * straight into the asset index / lazyLfs.
+   */
+  changedPaths?: string[];
 }
 
 function ensureDir(dir: string): void {
@@ -526,6 +557,12 @@ export async function syncUnityRepo(opts: { force?: boolean } = {}): Promise<Syn
 
   try {
     console.log(`[gitSync] Pulling ${localDir}`);
+    // Capture HEAD before and after pull so we can diff and hand the
+    // caller a precise list of changed paths — this is what lets the
+    // post-sync logic warm exactly the files that moved, instead of
+    // rescanning or refetching the whole tree.
+    const headBefore = await headFull(localDir).catch(() => undefined);
+
     // Serialise against lazyLfs. Both take `.git/index.lock` for
     // their checkout phases (reset --hard here, lfs checkout there);
     // running concurrently hard-fails one of them with
@@ -534,12 +571,54 @@ export async function syncUnityRepo(opts: { force?: boolean } = {}): Promise<Syn
     // opportunistically fix — which is exactly the symptom the user
     // reports where "Git Sync" is required to unstick a scene load.
     await scheduleInRepo(() => pullSparse(localDir));
-    const head = await headShort(localDir);
-    return { action: 'pulled', localDir, head };
+    const headAfter = await headFull(localDir).catch(() => undefined);
+    const head = headAfter ? headAfter.slice(0, 9) : await headShort(localDir);
+
+    let changedPaths: string[] = [];
+    if (headBefore && headAfter && headBefore !== headAfter) {
+      changedPaths = await diffChangedPaths(localDir, headBefore, headAfter);
+      console.log(
+        `[gitSync] pull advanced ${headBefore.slice(0, 8)}..${headAfter.slice(0, 8)}: ` +
+          `${changedPaths.length} changed path(s)`,
+      );
+    }
+    return { action: 'pulled', localDir, head, changedPaths };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[gitSync] Pull failed:', message);
     return { action: 'skipped', localDir, message: `pull failed: ${message}` };
+  }
+}
+
+async function headFull(targetDir: string): Promise<string> {
+  const inner = simpleGit(targetDir).env({ GIT_TERMINAL_PROMPT: '0' } as Record<string, string>);
+  return (await inner.revparse(['HEAD'])).trim();
+}
+
+async function diffChangedPaths(
+  targetDir: string,
+  from: string,
+  to: string,
+): Promise<string[]> {
+  const inner = simpleGit(targetDir).env({ GIT_TERMINAL_PROMPT: '0' } as Record<string, string>);
+  try {
+    // --diff-filter=ACMRT covers add/copy/modify/rename/type-change.
+    // Deleted files are excluded because there's nothing to warm.
+    const raw = await inner.raw([
+      'diff',
+      '--name-only',
+      '--diff-filter=ACMRT',
+      `${from}..${to}`,
+    ]);
+    return raw
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .map((s) => s.replace(/\\/g, '/'));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[gitSync] diff ${from.slice(0, 8)}..${to.slice(0, 8)} failed: ${msg}`);
+    return [];
   }
 }
 

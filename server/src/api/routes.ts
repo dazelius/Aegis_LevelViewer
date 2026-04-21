@@ -53,6 +53,7 @@ import {
   bulkFetchMaterialsAndTextures,
   getBulkPrefetchProgress,
   isLfsPointerBuf,
+  warmChangedPaths,
 } from '../git/lazyLfs.js';
 import { consumeLfsPointerMaterialStats } from '../unity/materialParser.js';
 import { bundleMode, config, getAssetsDir, getRepo2LocalDir } from '../config.js';
@@ -120,6 +121,50 @@ apiRouter.get('/levels', async (_req: Request, res: Response) => {
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
+});
+
+/**
+ * Warm-up endpoint. Clients (typically the level-list thumbnail grid)
+ * POST to this when the user hovers or focuses a scene tile so we can
+ * start streaming the scene YAML + its referenced LFS pointers into
+ * the cache before the actual click lands. Always fire-and-forget:
+ * we return 204 immediately and never block, so even rapid hover
+ * storms don't accumulate work — the underlying `registerBatch`
+ * layer dedupes in-flight fetches per absPath.
+ *
+ * No-op in bundle mode (nothing to warm — everything's pre-baked).
+ */
+apiRouter.post('/levels/*/warm', async (req: Request, res: Response) => {
+  if (bundleMode) {
+    res.status(204).end();
+    return;
+  }
+  const relPathRaw = req.params[0];
+  if (!relPathRaw || !relPathRaw.toLowerCase().endsWith('.unity')) {
+    res.status(204).end();
+    return;
+  }
+  const relPath = path.posix.normalize(relPathRaw).replace(/^(\.\.(\/|$))+/, '');
+  if (relPath.startsWith('..') || relPath.includes('..\\')) {
+    res.status(204).end();
+    return;
+  }
+  const repoDir = getRepo2LocalDir();
+  const absPath = path.join(repoDir, relPath);
+  // Respond first — the warm work happens on the next tick.
+  res.status(204).end();
+  // The scene YAML itself might be a pointer, so register it for fetch
+  // and, on completion, walk its GUID graph. We intentionally don't
+  // await anything here: callers treat this as hinting.
+  void (async () => {
+    try {
+      await ensureLfsFile(absPath, repoDir, 15_000);
+      triggerLazyLfsForScene(absPath, repoDir);
+      await ensureSceneYamlPointersReady(absPath, repoDir, 5_000).catch(() => undefined);
+    } catch {
+      // never propagate
+    }
+  })();
 });
 
 apiRouter.get('/levels/*', async (req: Request, res: Response) => {
@@ -1047,6 +1092,13 @@ apiRouter.post('/sync', (_req: Request, res: Response) => {
         action: result.action,
         head: result.head,
       };
+      // Targeted warm-up: if the pull advanced HEAD, the gitSync layer
+      // already handed us the list of files that changed. Feed them
+      // straight to lazyLfs so the exact scenes a reviewer is about
+      // to click land in the LFS cache before the first click hits.
+      if (result.changedPaths && result.changedPaths.length > 0) {
+        warmChangedPaths(getRepo2LocalDir(), result.changedPaths);
+      }
       // Re-run the bulk `.mat` + image prefetch so any new / changed
       // pointers introduced by the sync get downloaded in one pass.
       bulkFetchMaterialsAndTextures(getRepo2LocalDir(), assetIndex).catch((err) => {

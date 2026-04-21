@@ -529,6 +529,90 @@ export function bulkFetchMaterialsAndTextures(
   return bulkInFlight;
 }
 
+/**
+ * Warm the LFS cache for a freshly-synced set of repo-relative paths.
+ *
+ * Called from the post-`syncUnityRepo` fire-and-forget pipeline after
+ * we've diffed old..new HEAD. We only care about files that:
+ *   - live under the sparse tree on disk (skips tombstones/deletes),
+ *   - are tracked by LFS (pointer on disk right now),
+ *   - and are either scene-level YAML, materials, or scenes themselves.
+ *
+ * Each matched scene (`.unity`) also has its referenced binaries
+ * queued via the existing scene-level walker, so a reviewer opening
+ * the just-changed scene finds everything in the local LFS cache.
+ *
+ * Fire-and-forget: caller does not need to await.
+ */
+export function warmChangedPaths(repoDir: string, changedRepoRelPaths: string[]): void {
+  if (changedRepoRelPaths.length === 0) return;
+
+  const sceneAbsPaths: string[] = [];
+  const otherPointers: string[] = [];
+
+  for (const rel of changedRepoRelPaths) {
+    const abs = path.join(repoDir, rel);
+    let stat: fsSync.Stats;
+    try {
+      stat = fsSync.statSync(abs);
+    } catch {
+      continue; // file was removed or sits outside sparse tree
+    }
+    if (!stat.isFile()) continue;
+
+    const ext = path.extname(rel).toLowerCase();
+    const isScene = ext === '.unity';
+    const isYaml = SCENE_YAML_EXTS.has(ext);
+    const isBinary = BINARY_EXTS.has(ext);
+
+    if (!isScene && !isYaml && !isBinary) continue;
+    if (!isLfsPointerSync(abs)) continue;
+
+    if (isScene) sceneAbsPaths.push(abs);
+    else otherPointers.push(abs);
+  }
+
+  const totalPointer = sceneAbsPaths.length + otherPointers.length;
+  if (totalPointer === 0) {
+    console.log(
+      `[lazyLfs] warmChangedPaths: ${changedRepoRelPaths.length} changed, ` +
+        `nothing to warm (already materialised or not LFS)`,
+    );
+    return;
+  }
+
+  console.log(
+    `[lazyLfs] warmChangedPaths: ${sceneAbsPaths.length} scene(s) + ` +
+      `${otherPointers.length} YAML/binary pointer(s)`,
+  );
+
+  // First: queue the scene YAML + any changed mats/prefabs. These feed
+  // parseScene, so materialising them quickly is what makes the next
+  // scene open fast even if the reviewer clicks within a second of the
+  // sync finishing.
+  if (otherPointers.length > 0) {
+    registerBatch(otherPointers, repoDir); // not awaited
+  }
+
+  // Second: for each changed scene, walk its GUID graph and queue the
+  // referenced binaries (textures, FBX, etc.). We also register the
+  // scene pointer itself so its YAML lands in the cache before the
+  // first request.
+  for (const sceneAbs of sceneAbsPaths) {
+    registerBatch([sceneAbs], repoDir); // not awaited
+    // Can't walk GUIDs until the scene YAML is smudged — schedule a
+    // follow-up via a microtask that races the scene smudge.
+    void (async () => {
+      try {
+        await ensureLfsFile(sceneAbs, repoDir, 20_000);
+        triggerLazyLfsForScene(sceneAbs, repoDir);
+      } catch {
+        // Never fail the background warmer
+      }
+    })();
+  }
+}
+
 export function triggerLazyLfsForScene(sceneAbsPath: string, repoDir: string): void {
   const guids = extractGuidsFromFile(sceneAbsPath);
   if (guids.length === 0) return;
