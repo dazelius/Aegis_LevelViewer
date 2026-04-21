@@ -205,6 +205,20 @@ export function wsUrl(path: string): string {
 /** Public read-only accessor so the router can mirror the deploy base. */
 export const APP_BASE: string = RAW_BASE || '/';
 
+/** Resolve an asset that lives in `web/public/` (served as-is by Vite
+ *  under the configured `base`). Vite rewrites absolute `/foo.png` in
+ *  `index.html` at build time, but JSX string literals like
+ *  `<img src="/foo.png">` are not processed — they stay absolute and
+ *  miss the reverse-proxy mount. Use `publicAsset('/foo.png')` in JSX
+ *  (or anywhere the URL is constructed at runtime) to prepend the
+ *  deploy base. Leading slash optional. */
+export function publicAsset(name: string): string {
+  const trimmed = name.replace(/^\/+/, '');
+  // import.meta.env.BASE_URL always ends with '/' per Vite's contract,
+  // so we can concatenate safely.
+  return `${import.meta.env.BASE_URL}${trimmed}`;
+}
+
 export async function apiGet<T>(url: string): Promise<T> {
   const res = await fetch(apiUrl(url));
   if (!res.ok) {

@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { apiGet, apiPost } from './lib/api';
+import { apiGet, apiPost, publicAsset } from './lib/api';
 import { ensureConnected } from './lib/multiplayer';
 import { NicknameBadge } from './lib/NicknameBadge';
 
@@ -106,7 +106,7 @@ export default function App() {
       <header className="app-header">
         <Link to="/" className="app-brand" aria-label="Aegisgram home">
           <img
-            src="/AegisgramLogo.png"
+            src={publicAsset('/AegisgramLogo.png')}
             alt=""
             className="app-brand-logo"
             draggable={false}

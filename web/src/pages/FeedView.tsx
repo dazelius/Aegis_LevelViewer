@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { publicAsset } from '../lib/api';
 import { FeedbackReactions } from '../lib/FeedbackReactions';
 import {
   fetchAllFeedbacks,
@@ -165,7 +166,7 @@ export default function FeedView() {
           cleanly onto the dark page.
         */}
         <img
-          src="/AegisgramLogo.png"
+          src={publicAsset('/AegisgramLogo.png')}
           alt="Aegisgram Feed"
           className="feed-view-logo"
           draggable={false}
