@@ -36,14 +36,25 @@ async function bootstrap(): Promise<void> {
   // iframe embedding: the deployed Aegisgram is intended to be loaded
   // inside a parent platform's `<iframe>`. `frame-ancestors` is the
   // modern CSP directive for that; it supersedes `X-Frame-Options` in
-  // every browser that cares and lets us whitelist multiple parent
-  // origins via env. Empty `iframeOrigins` resolves to `'self'` only,
-  // which keeps local dev safe by default.
+  // every browser that cares and lets us whitelist parent origins via
+  // env. Notes:
+  //   - Empty `iframeOrigins` → `'self'` only (safe default for local).
+  //   - `*` as the value (or one of the values) → drop the restriction
+  //     entirely by emitting `frame-ancestors *`. This is the escape
+  //     hatch for trusted-internal deploys where the platform wraps
+  //     the iframe in deeper ancestor chains (e.g. SSO gateways, host
+  //     portal pages on a different subdomain). `frame-ancestors`
+  //     applies to ALL ancestors, not just the immediate parent, so a
+  //     single mismatched ancestor origin is enough to block.
+  //   - Otherwise whitespace-separated list of origins is passed through.
   app.use((_req, res, next) => {
-    const extraOrigins = config.iframeOrigins.trim();
-    const directive = extraOrigins
-      ? `frame-ancestors 'self' ${extraOrigins}`
-      : `frame-ancestors 'self'`;
+    const raw = config.iframeOrigins.trim();
+    const tokens = raw.split(/\s+/).filter(Boolean);
+    const directive = tokens.includes('*')
+      ? `frame-ancestors *`
+      : tokens.length > 0
+        ? `frame-ancestors 'self' ${tokens.join(' ')}`
+        : `frame-ancestors 'self'`;
     res.setHeader('Content-Security-Policy', directive);
     next();
   });
