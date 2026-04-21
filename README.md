@@ -92,24 +92,39 @@ Delete `data/bundle/` to force a full rebake.
 
 ## Deploying — platform build-time bake (recommended)
 
-For a managed Node host (Render, Railway, Fly.io, Cloud Run, Heroku-
-likes). The platform's build step runs the bake, so there's nothing to
-commit locally.
+Simplest possible flow for any host that can run Node:
 
-### Build command
 ```bash
-npm ci && npm run platform-build
-```
-`platform-build` = `bake` → `build`. The bake clones Aegis, pulls its
-LFS, parses scenes, transcodes textures and writes `data/bundle/`.
-`build` then compiles server TypeScript + web Vite bundle.
-
-### Start command
-```bash
+git clone <aegisgram-repo>
+cd aegisgram
 npm start
 ```
-Server auto-detects `data/bundle/manifest.json` and runs in bundle
+
+That's it. `npm start` is an orchestrator that, in order:
+1. Runs `npm ci --include=dev` if `node_modules/` is empty.
+2. Builds the web client into `web/dist/` if not already there.
+3. Builds the server into `server/dist/` if not already there.
+4. Bakes `data/bundle/` if missing **and** `GITLAB_REPO2_URL` is set.
+5. Launches `node server/dist/index.js`.
+
+Every step is idempotent — second and subsequent boots skip straight
+to step 5, so restarts are fast.
+
+The server auto-detects `data/bundle/manifest.json` and runs in bundle
 mode. `GET /api/health` reports `{"mode":"bundle", ...}`.
+
+### Explicit build/start split (optional)
+
+If your platform prefers a conventional build-then-start separation
+(e.g. Heroku build images vs dyno runtime), use:
+
+- **Build command:** `npm ci && npm run platform-build`
+  (= `bake` → `build`)
+- **Start command:** `npm run start:server-only`
+  (skips the orchestrator; runs `node server/dist/index.js` directly)
+
+This is purely a performance choice — the zero-config `npm start`
+path produces the same artifacts.
 
 ### Required env vars on the platform
 

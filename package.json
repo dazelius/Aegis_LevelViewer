@@ -12,7 +12,8 @@
     "dev:server": "npm run dev --workspace=server",
     "dev:web": "npm run dev --workspace=web",
     "build": "npm run build --workspace=server && npm run build --workspace=web",
-    "start": "npm run start --workspace=server",
+    "start": "node scripts/start.mjs",
+    "start:server-only": "npm run start --workspace=server",
     "bake": "npm run bake --workspace=server",
     "platform-build": "npm run bake && npm run build"
   },
