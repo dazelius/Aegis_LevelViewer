@@ -422,6 +422,17 @@ const IMAGE_EXTS = new Set([
  */
 let bulkInFlight: Promise<void> | null = null;
 
+/**
+ * Batch size specifically for bulk prefetch. Smaller than the shared
+ * {@link BATCH_SIZE} because bulk is on a background path where the
+ * UI polls per-batch progress — if a single batch is too big, an
+ * individual fetch can take 30–90 s on an internal LFS endpoint and
+ * the user sees the counter "stuck" for that whole window. 25 gives
+ * a visible tick roughly every few seconds on a typical network and
+ * still keeps per-batch git-lfs overhead amortised.
+ */
+const BULK_BATCH_SIZE = 25;
+
 export function bulkFetchMaterialsAndTextures(
   repoDir: string,
   assetIndex: {
@@ -449,9 +460,10 @@ export function bulkFetchMaterialsAndTextures(
       return;
     }
 
+    const totalBatches = Math.ceil(candidates.length / BULK_BATCH_SIZE);
     console.log(
       `[lazyLfs] bulk prefetch: ${candidates.length} pointer(s) ` +
-        `(.mat + images) — batching in chunks of ${BATCH_SIZE}`,
+        `(.mat + images) — ${totalBatches} batch(es) of up to ${BULK_BATCH_SIZE}`,
     );
 
     bulkProgress = {
@@ -462,14 +474,12 @@ export function bulkFetchMaterialsAndTextures(
       startedAt: Date.now(),
     };
 
-    // Chunk into our existing BATCH_SIZE so each `git lfs fetch` call
-    // stays under the OS arg-list limit and shares the repo lock with
-    // any in-flight scene-level prefetches.
-    for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-      const chunk = candidates.slice(i, i + BATCH_SIZE);
-      // Filter out paths that have already been materialised by a
-      // concurrent lazy fetch between scan time and now — saves work
-      // and avoids pointless log noise.
+    for (let i = 0; i < candidates.length; i += BULK_BATCH_SIZE) {
+      const chunk = candidates.slice(i, i + BULK_BATCH_SIZE);
+      const batchIdx = Math.floor(i / BULK_BATCH_SIZE) + 1;
+
+      // Filter out paths materialised by a concurrent lazy fetch
+      // between scan time and now — saves work and log noise.
       const stillPointers = chunk.filter((p) => isLfsPointerSync(p));
       if (stillPointers.length === 0) {
         bulkProgress = {
@@ -479,13 +489,24 @@ export function bulkFetchMaterialsAndTextures(
         };
         continue;
       }
+
+      const batchStart = Date.now();
+      console.log(
+        `[lazyLfs] bulk batch ${batchIdx}/${totalBatches}: fetching ${stillPointers.length} file(s)…`,
+      );
       try {
         await registerBatch(stillPointers, repoDir);
+        const took = ((Date.now() - batchStart) / 1000).toFixed(1);
+        console.log(
+          `[lazyLfs] bulk batch ${batchIdx}/${totalBatches}: done in ${took}s`,
+        );
       } catch (err) {
-        bulkProgress = {
-          ...bulkProgress,
-          lastError: err instanceof Error ? err.message : String(err),
-        };
+        const took = ((Date.now() - batchStart) / 1000).toFixed(1);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(
+          `[lazyLfs] bulk batch ${batchIdx}/${totalBatches}: failed after ${took}s — ${msg.split(/\r?\n/)[0]}`,
+        );
+        bulkProgress = { ...bulkProgress, lastError: msg };
       }
       bulkProgress = {
         ...bulkProgress,

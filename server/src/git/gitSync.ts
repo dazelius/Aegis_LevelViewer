@@ -395,7 +395,32 @@ async function pullSparse(targetDir: string): Promise<void> {
       // ignore, the reset below may still succeed against a locally cached ref
     }
   }
-  await inner.raw(['reset', '--hard', `origin/${branch}`]);
+
+  // Skip the expensive `git reset --hard` (which checks out every file
+  // in the sparse tree — 11k+ "Updating files: 100%") when we're
+  // already pointed at the same commit as origin/<branch>. Without
+  // this guard, every manual "Git Sync" click — even when nothing has
+  // changed upstream — rewrites the working tree, holds the repo
+  // lock for tens of seconds and starves in-flight scene fetches and
+  // the bulk LFS prefetch. We still always run the fetch above so we
+  // see new upstream commits.
+  let needsReset = true;
+  try {
+    const localHead = (await inner.revparse(['HEAD'])).trim();
+    const remoteHead = (await inner.revparse([`origin/${branch}`])).trim();
+    if (localHead && remoteHead && localHead === remoteHead) {
+      console.log(
+        `[gitSync] already at origin/${branch} (${localHead.slice(0, 8)}) — skipping reset --hard`,
+      );
+      needsReset = false;
+    }
+  } catch {
+    // If rev-parse fails (shallow edge cases, missing ref), fall through
+    // to the reset — it's the safe default.
+  }
+  if (needsReset) {
+    await inner.raw(['reset', '--hard', `origin/${branch}`]);
+  }
 
   await fetchLfsAssets(targetDir);
 }
