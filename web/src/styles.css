@@ -347,6 +347,160 @@ body.play-mode .app-header { display: none; }
   margin: 24px;
 }
 
+/* --- Scene load overlay (center-stage LFS fetch progress) ---------------
+ *
+ * Shown by `LevelViewer` while `fetchScene` is still polling the server
+ * for a scene whose `.unity` file is still a Git LFS pointer. First
+ * cold load of a scene can take 20–60s depending on blob size, so we
+ * give the user:
+ *   - a prominent centered card (not a sidebar banner)
+ *   - elapsed wall-clock + attempt counter
+ *   - a progress bar scaled against the client's retry budget
+ *   - the server's own `hint` string from the 409 body
+ *   - a long-wait explainer that appears after ~10s so it doesn't
+ *     clutter fast loads.
+ *
+ * Colours match the header brand gradient (#8ab7ff → #c4a6ff) so this
+ * feels like part of Aegisgram, not a generic browser spinner.
+ * --------------------------------------------------------------------- */
+.scene-load-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(
+      ellipse at center,
+      rgba(138, 183, 255, 0.08) 0%,
+      rgba(11, 13, 17, 0.95) 60%
+    ),
+    #0b0d11;
+  z-index: 50;
+}
+
+.scene-load-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(480px, 100%);
+  padding: 32px 28px;
+  background: #12151c;
+  border: 1px solid #232833;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+
+.scene-load-spinner {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.scene-load-spinner-ring {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 3px solid rgba(138, 183, 255, 0.18);
+  border-top-color: #8ab7ff;
+  border-right-color: #c4a6ff;
+  animation: scene-load-spin 1s linear infinite;
+}
+
+@keyframes scene-load-spin {
+  to { transform: rotate(360deg); }
+}
+
+.scene-load-error-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #3a1f24;
+  border: 1px solid #6a2730;
+  color: #ff8b99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.scene-load-headline {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #e8ecf1;
+}
+
+.scene-load-scene {
+  font-size: 14px;
+  font-weight: 600;
+  color: #c4a6ff;
+  word-break: break-all;
+}
+
+.scene-load-path {
+  font-size: 11px;
+  color: #6b7384;
+  word-break: break-all;
+  margin-top: -6px;
+}
+
+.scene-load-progress {
+  width: 100%;
+  height: 6px;
+  background: #1c2029;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.scene-load-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8ab7ff 0%, #c4a6ff 100%);
+  border-radius: 3px;
+  transition: width 250ms ease-out;
+}
+
+.scene-load-meta {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 12px;
+  color: #7a8598;
+  font-variant-numeric: tabular-nums;
+}
+
+.scene-load-hint {
+  font-size: 13px;
+  color: #9aa4b5;
+  margin-top: 4px;
+}
+
+.scene-load-detail {
+  font-size: 12px;
+  color: #6b7384;
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: #0f1218;
+  border: 1px solid #1d2230;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+
+.scene-load-overlay.is-error .scene-load-headline { color: #ff8b99; }
+.scene-load-overlay.is-error .scene-load-hint {
+  color: #c2879a;
+  word-break: break-word;
+}
+
 /* --- Inspector panel (click-select overlay) ---------------------------- */
 .inspector-panel {
   position: absolute;

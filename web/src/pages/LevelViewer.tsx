@@ -17,6 +17,7 @@ import {
   type BatchStatus,
   type GameObjectNode,
   type SceneJson,
+  type SceneLoadProgress,
   type UnityExport,
 } from '../lib/api';
 import {
@@ -59,15 +60,21 @@ export default function LevelViewer() {
   const relPath = decodeSplat(params['*'] ?? '');
   const [scene, setScene] = useState<SceneJson | UnityExport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<SceneLoadProgress | null>(null);
+  const [loadStartedAt, setLoadStartedAt] = useState<number>(() => Date.now());
 
   useEffect(() => {
     if (!relPath) return;
     let cancelled = false;
     setScene(null);
     setError(null);
+    setProgress(null);
+    setLoadStartedAt(Date.now());
     (async () => {
       try {
-        const data = await fetchScene(relPath);
+        const data = await fetchScene(relPath, (p) => {
+          if (!cancelled) setProgress(p);
+        });
         if (!cancelled) setScene(data);
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
@@ -78,13 +85,118 @@ export default function LevelViewer() {
     };
   }, [relPath]);
 
-  if (error) return <div className="status-banner">Failed to load scene: {error}</div>;
-  if (!scene) return <div className="status-banner">Loading scene...</div>;
+  if (error) {
+    return <SceneLoadOverlay relPath={relPath} error={error} />;
+  }
+  if (!scene) {
+    return (
+      <SceneLoadOverlay
+        relPath={relPath}
+        progress={progress}
+        loadStartedAt={loadStartedAt}
+      />
+    );
+  }
 
   if (isUnityExport(scene)) {
     return <UnityExportCanvas scene={scene} relPath={relPath} />;
   }
   return <ViewerCanvas scene={scene} relPath={relPath} />;
+}
+
+/**
+ * Full-viewport overlay shown while the scene is loading or after a
+ * fatal load error. Gives the user real feedback on the (often slow)
+ * Git LFS fetch that backs a cold scene load — elapsed wall-clock,
+ * attempt counter, server-supplied hint, and a progress bar scaled
+ * against the client's retry budget so the bar reaches ~100% right
+ * around the point where the client would give up.
+ */
+function SceneLoadOverlay({
+  relPath,
+  progress,
+  loadStartedAt,
+  error,
+}: {
+  relPath: string;
+  progress?: SceneLoadProgress | null;
+  loadStartedAt?: number;
+  error?: string;
+}): JSX.Element {
+  // We tick a local clock so "elapsed" keeps updating even during the
+  // 2.5s sleep between server polls (progress updates only fire at
+  // phase boundaries, which would otherwise make the number look
+  // frozen to the user).
+  const [now, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    if (error) return undefined;
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [error]);
+
+  const sceneName = relPath ? relPath.split('/').pop() || relPath : '';
+  const elapsedMs = loadStartedAt ? Math.max(0, now - loadStartedAt) : 0;
+  const elapsedSec = (elapsedMs / 1000).toFixed(1);
+  const budgetMs = progress?.totalBudgetMs ?? 75_000;
+  const pct = Math.min(100, Math.round((elapsedMs / budgetMs) * 100));
+
+  // Friendly copy. The server's own `hint` (e.g. "LFS fetch in progress
+  // or upstream blob missing — retry shortly") is the most informative
+  // thing we can show, so prefer it once we've seen a 409; otherwise
+  // fall back to a generic "connecting" line.
+  const headline = error ? 'Failed to load scene' : 'Loading scene…';
+  const hint = error
+    ? error
+    : progress?.hint
+      ? progress.hint
+      : 'Connecting to the server…';
+
+  return (
+    <div className={`scene-load-overlay${error ? ' is-error' : ''}`}>
+      <div className="scene-load-card" role="status" aria-live="polite">
+        {!error && (
+          <div className="scene-load-spinner" aria-hidden="true">
+            <div className="scene-load-spinner-ring" />
+          </div>
+        )}
+        {error && (
+          <div className="scene-load-error-icon" aria-hidden="true">!</div>
+        )}
+        <div className="scene-load-headline">{headline}</div>
+        {sceneName && <div className="scene-load-scene">{sceneName}</div>}
+        {relPath && <div className="scene-load-path">{relPath}</div>}
+
+        {!error && (
+          <>
+            <div className="scene-load-progress">
+              <div
+                className="scene-load-progress-bar"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="scene-load-meta">
+              <span>{elapsedSec}s elapsed</span>
+              {progress && (
+                <span>
+                  attempt {progress.attempt} / {progress.maxAttempts}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="scene-load-hint">{hint}</div>
+
+        {!error && elapsedMs > 10_000 && (
+          <div className="scene-load-detail">
+            First load of a scene can take a while — the server is
+            pulling the scene's binary assets from Git LFS on demand.
+            Subsequent loads of the same scene are near-instant.
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**

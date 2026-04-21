@@ -249,7 +249,28 @@ export async function fetchLevels(): Promise<SceneListItem[]> {
   return apiGet<SceneListItem[]>('/api/levels');
 }
 
-export async function fetchScene(relPath: string): Promise<SceneJson | UnityExport> {
+/**
+ * Progress update emitted by `fetchScene` while the server is still
+ * pulling the scene's LFS blob. `phase` is 'requesting' while the HTTP
+ * call is in flight and 'waiting' during the inter-attempt sleep.
+ * UI uses these to animate a determinate-looking overlay on top of an
+ * inherently indeterminate LFS fetch.
+ */
+export interface SceneLoadProgress {
+  attempt: number;
+  maxAttempts: number;
+  /** Total fetchScene retry budget, in ms (for rendering a progress bar). */
+  totalBudgetMs: number;
+  elapsedMs: number;
+  /** Human-readable hint from the server's 409 body (`hint` field), if any. */
+  hint?: string;
+  phase: 'requesting' | 'waiting';
+}
+
+export async function fetchScene(
+  relPath: string,
+  onProgress?: (p: SceneLoadProgress) => void,
+): Promise<SceneJson | UnityExport> {
   // relPath can contain slashes; each segment must be encoded individually so
   // express sees `/api/levels/<relPath>` correctly.
   const encoded = relPath.split('/').map(encodeURIComponent).join('/');
@@ -266,7 +287,18 @@ export async function fetchScene(relPath: string): Promise<SceneJson | UnityExpo
   // user's first click instead of bouncing them to an error page.
   const MAX_ATTEMPTS = 30;
   const RETRY_DELAY_MS = 2500;
+  const TOTAL_BUDGET_MS = MAX_ATTEMPTS * RETRY_DELAY_MS;
+  const startedAt = Date.now();
+  let lastHint: string | undefined;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    onProgress?.({
+      attempt: attempt + 1,
+      maxAttempts: MAX_ATTEMPTS,
+      totalBudgetMs: TOTAL_BUDGET_MS,
+      elapsedMs: Date.now() - startedAt,
+      hint: lastHint,
+      phase: 'requesting',
+    });
     const res = await fetch(url);
     if (res.status !== 409) {
       if (!res.ok) {
@@ -275,12 +307,29 @@ export async function fetchScene(relPath: string): Promise<SceneJson | UnityExpo
       }
       return (await res.json()) as SceneJson | UnityExport;
     }
+    // 409 → peek at the server's hint so the UI can surface "LFS fetch
+    // in progress" (or whatever lazyLfs decided to say) instead of a
+    // generic spinner.
+    try {
+      const body = (await res.clone().json()) as { hint?: string };
+      if (body && typeof body.hint === 'string') lastHint = body.hint;
+    } catch {
+      // body wasn't JSON — ignore, keep the previous hint.
+    }
     if (attempt === MAX_ATTEMPTS - 1) {
       const text = await res.text().catch(() => '');
       throw new Error(
         `Scene still not available after ${MAX_ATTEMPTS} attempts (LFS fetch did not complete): ${text}`,
       );
     }
+    onProgress?.({
+      attempt: attempt + 1,
+      maxAttempts: MAX_ATTEMPTS,
+      totalBudgetMs: TOTAL_BUDGET_MS,
+      elapsedMs: Date.now() - startedAt,
+      hint: lastHint,
+      phase: 'waiting',
+    });
     await new Promise<void>((r) => setTimeout(r, RETRY_DELAY_MS));
   }
   throw new Error('unreachable');
