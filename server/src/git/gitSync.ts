@@ -26,7 +26,56 @@ export async function applyUrlRewritesToRepo(repoDir: string): Promise<void> {
   return persistUrlRewritesInRepo(repoDir);
 }
 
+/**
+ * Apply one-time local git config that massively speeds up checkout /
+ * status on Windows (where a sparse tree of 11k+ files otherwise
+ * takes tens of seconds per `reset --hard`). Idempotent — safe to run
+ * on every pull. Writes a sentinel so we only pay the config cost
+ * once per clone.
+ */
+async function applyRepoPerfConfig(repoDir: string): Promise<void> {
+  const sentinel = path.join(repoDir, '.git', '.aegis-perf-applied');
+  if (fs.existsSync(sentinel)) return;
+  const inner = simpleGit(repoDir).env({ GIT_TERMINAL_PROMPT: '0' } as Record<string, string>);
+  const entries: Array<[string, string]> = [
+    // Untracked-cache + fsmonitor dramatically speed up `git status`
+    // and checkout on large working trees. The built-in fsmonitor
+    // daemon ships with git-for-windows ≥ 2.37; older git will log a
+    // warning but ignore it, so it's safe to set unconditionally.
+    ['core.untrackedCache', 'true'],
+    ['core.fsmonitor', 'true'],
+    // Bundles many-file-friendly defaults: larger pack window, reduced
+    // index writes. Safe on all platforms.
+    ['feature.manyFiles', 'true'],
+    // NB: we deliberately do NOT disable the lfs smudge filter via
+    // `filter.lfs.smudge`. The GIT_LFS_SKIP_SMUDGE env we set in
+    // pullSparse already handles checkout, and our lazyLfs codepath
+    // relies on `git lfs checkout` working normally to materialise
+    // fetched blobs.
+  ];
+  for (const [key, value] of entries) {
+    try {
+      await inner.raw(['config', '--local', key, value]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[gitSync] failed to set ${key}: ${msg}`);
+    }
+  }
+  try {
+    fs.writeFileSync(sentinel, new Date().toISOString());
+    console.log('[gitSync] applied perf config (fsmonitor, untrackedCache, lfs-skip)');
+  } catch {
+    // sentinel is just an optimisation — if it can't be written we just
+    // re-apply next time, which is idempotent anyway.
+  }
+}
+
 async function persistUrlRewritesInRepo(repoDir: string): Promise<void> {
+  // Piggy-back perf config on the same entry point that every sync
+  // path already runs — avoids threading a new call site through both
+  // clone and pull.
+  await applyRepoPerfConfig(repoDir);
+
   const rewrites = getGitUrlRewrites();
   if (rewrites.length === 0) return;
   const inner = simpleGit(repoDir).env({
@@ -376,10 +425,31 @@ async function pullSparse(targetDir: string): Promise<void> {
     // ignore
   }
 
+  // `sparse-checkout set` is the OTHER big working-tree rewriter on
+  // every pull: in --no-cone mode it walks the index and may re-
+  // materialise thousands of files, even when patterns haven't
+  // changed, because it re-evaluates membership per path. Store a
+  // hash of the currently-applied pattern set next to the sentinel
+  // and skip the `set` entirely when unchanged.
+  const sparseSig = sparsePaths.slice().sort().join('\n');
+  const sparseMarker = path.join(targetDir, '.git', '.aegis-sparse-applied');
+  let sparseApplied = '';
   try {
-    await inner.raw(['sparse-checkout', 'set', ...sparsePaths]);
+    sparseApplied = fs.readFileSync(sparseMarker, 'utf8');
   } catch {
-    // Non-fatal; repo may not have sparse-checkout enabled for some reason.
+    // marker missing → fall through and apply
+  }
+  if (sparseApplied !== sparseSig) {
+    try {
+      await inner.raw(['sparse-checkout', 'set', ...sparsePaths]);
+      try {
+        fs.writeFileSync(sparseMarker, sparseSig);
+      } catch {
+        // marker write failure is non-fatal — worst case we re-apply next time
+      }
+    } catch {
+      // Non-fatal; repo may not have sparse-checkout enabled for some reason.
+    }
   }
 
   // Fetch the branch (creating/updating the remote ref), then hard-reset.
