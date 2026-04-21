@@ -13,7 +13,8 @@
     "dev:web": "npm run dev --workspace=web",
     "build": "npm run build --workspace=server && npm run build --workspace=web",
     "start": "npm run start --workspace=server",
-    "bake": "npm run bake --workspace=server"
+    "bake": "npm run bake --workspace=server",
+    "platform-build": "npm run bake && npm run build"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"

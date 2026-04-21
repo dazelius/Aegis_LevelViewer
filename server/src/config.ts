@@ -12,29 +12,65 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 // Load .env from the repo root regardless of cwd (tsx/ts-node may run in server/).
 dotenv.config({ path: path.join(REPO_ROOT, '.env') });
 
-function env(key: string, fallback?: string): string {
-  const v = process.env[key];
-  if (v === undefined || v === '') {
-    if (fallback !== undefined) return fallback;
-    throw new Error(`Missing required env var: ${key}`);
-  }
-  return v;
-}
-
 function envOptional(key: string, fallback: string): string {
   const v = process.env[key];
   return v === undefined || v === '' ? fallback : v;
 }
 
+/**
+ * True iff a pre-baked content bundle exists on disk. We detect bundle
+ * mode at module load because several fields below want to branch on it
+ * (e.g. GitLab creds are REQUIRED for live mode but OPTIONAL in bundle
+ * mode — failing import on missing creds would break deploys that don't
+ * have the source repo configured).
+ *
+ * Kept in sync with the exported `bundleMode` constant below — we compute
+ * it once here early so the config object can reference it.
+ */
+const _bundleDir = path.resolve(REPO_ROOT, envOptional('AEGISGRAM_BUNDLE_DIR', './data/bundle'));
+const _bundleModeAtLoad = (() => {
+  try {
+    return fs.statSync(path.join(_bundleDir, 'manifest.json')).isFile();
+  } catch {
+    return false;
+  }
+})();
+
+/**
+ * Required-in-live-mode env var reader. Missing keys throw (so live dev
+ * surfaces misconfiguration loudly at startup) unless we're in bundle
+ * mode, where runtime has no use for GitLab credentials and demanding
+ * them would break the common "just drop it on Render/Railway" deploy.
+ */
+function envRequiredInLiveMode(key: string): string {
+  const v = process.env[key];
+  if (v === undefined || v === '') {
+    if (_bundleModeAtLoad) return '';
+    throw new Error(
+      `Missing required env var: ${key}. ` +
+        `Set it in your .env for local dev, or run \`npm run bake\` to produce ` +
+        `a \`data/bundle/\` so the server can start in bundle mode without it.`,
+    );
+  }
+  return v;
+}
+
 export const config = {
   repoRoot: REPO_ROOT,
 
-  // Use a dedicated env var so a shared .env (PORT=3001 for another service)
-  // doesn't force a conflict. Default 3101 is specific to Level Viewer.
-  port: Number(envOptional('LEVEL_VIEWER_PORT', '3101')),
+  // Port resolution:
+  //   1. `LEVEL_VIEWER_PORT` — our dedicated var, used by local scripts.
+  //   2. `PORT` — the de-facto convention for managed Node hosts
+  //      (Render, Railway, Fly.io, Heroku, Cloud Run). Platforms inject
+  //      it at runtime and expect the process to listen there.
+  //   3. `3101` — local fallback.
+  // Order matters: explicit `LEVEL_VIEWER_PORT` wins over a platform-
+  // injected `PORT` so a dev can still override on a machine where
+  // something else has already claimed `PORT`.
+  port: Number(envOptional('LEVEL_VIEWER_PORT', envOptional('PORT', '3101'))),
   nodeEnv: envOptional('NODE_ENV', 'development'),
 
-  gitlabRepo2Url: env('GITLAB_REPO2_URL'),
+  gitlabRepo2Url: envRequiredInLiveMode('GITLAB_REPO2_URL'),
   gitlabRepo2Token: envOptional('GITLAB_REPO2_TOKEN', ''),
 
   gitCloneBaseDir: path.resolve(REPO_ROOT, envOptional('GIT_CLONE_BASE_DIR', './data/repos')),
@@ -98,7 +134,7 @@ export const config = {
   //
   // Presence of `<bundleDir>/manifest.json` is the single switch. Local dev
   // continues to use the live Project Aegis clone when no bundle is present.
-  bundleDir: path.resolve(REPO_ROOT, envOptional('AEGISGRAM_BUNDLE_DIR', './data/bundle')),
+  bundleDir: _bundleDir,
 
   // Space-separated list of origins allowed to embed Aegisgram in an iframe,
   // e.g. "https://platform.example.com https://staging.example.com".
@@ -115,13 +151,7 @@ export const config = {
  * request. The bundle directory can be swapped via the
  * `AEGISGRAM_BUNDLE_DIR` env var (default `./data/bundle`).
  */
-export const bundleMode: boolean = (() => {
-  try {
-    return fs.statSync(path.join(config.bundleDir, 'manifest.json')).isFile();
-  } catch {
-    return false;
-  }
-})();
+export const bundleMode: boolean = _bundleModeAtLoad;
 
 export function getRepo2LocalDir(): string {
   // Derive a directory name from the repo URL, e.g. "projectaegis"

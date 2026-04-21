@@ -32,6 +32,17 @@
  * input hasn't changed, and only re-writes the manifest. Delete
  * `data/bundle/` to force a full re-bake.
  */
+// Force a full LFS pull during bake — we NEED the texture/FBX bytes, not
+// pointer files. The server's default is `LEVEL_VIEWER_GIT_FETCH_LFS=false`
+// because live mode only parses YAML; the bake step's requirements are
+// fundamentally different. Setting this before any `../server/src/*`
+// import means `config.ts` picks it up during its one-time module load.
+// Anyone explicitly setting the env var to 'false' in their shell can
+// still override (rare, debugging-only).
+if (!process.env.LEVEL_VIEWER_GIT_FETCH_LFS) {
+  process.env.LEVEL_VIEWER_GIT_FETCH_LFS = 'true';
+}
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -520,7 +531,29 @@ async function main(): Promise<void> {
   const manifestPath = path.join(bundleDir, 'manifest.json');
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
 
-  // --- 9. Summary ---------------------------------------------------------
+  // --- 9. Optional source cleanup -----------------------------------------
+  // Opt-in via `AEGISGRAM_POST_BAKE_CLEANUP=1`. Intended for platform build
+  // steps where the runtime container is the same filesystem as the build:
+  // the Aegis clone (often several GB) and the Unity batch export scratch
+  // dir are useless at runtime once the bundle exists, and leaving them
+  // around bloats the image. Never runs unless explicitly asked because a
+  // local developer would lose their working clone.
+  if (envFlag('AEGISGRAM_POST_BAKE_CLEANUP')) {
+    const targets = [
+      path.resolve(config.repoRoot, 'data/repos'),
+      path.resolve(config.repoRoot, 'data/unity-export'),
+    ];
+    for (const t of targets) {
+      try {
+        await fs.rm(t, { recursive: true, force: true });
+        console.log(`[bake] cleanup: removed ${t}`);
+      } catch (err) {
+        console.warn(`[bake] cleanup: ${t} — ${(err as Error).message}`);
+      }
+    }
+  }
+
+  // --- 10. Summary ---------------------------------------------------------
   const bytes = await sumDirBytes(bundleDir);
   console.log('');
   console.log('[bake] ==================== SUMMARY ====================');
@@ -529,10 +562,13 @@ async function main(): Promise<void> {
   console.log(`[bake] fbx-mat packs:   ${fbxMaterialPacks.length}`);
   console.log(`[bake] bundle size:     ${(bytes / (1024 * 1024)).toFixed(1)} MB`);
   console.log(`[bake] manifest:        ${manifestPath}`);
-  console.log(
-    `[bake] next steps: \`git add data/bundle && git commit\` ` +
-      `(data/bundle/blobs is tracked via LFS per .gitattributes)`,
-  );
+}
+
+function envFlag(key: string): boolean {
+  const v = process.env[key];
+  if (!v) return false;
+  const n = v.toLowerCase();
+  return n === '1' || n === 'true' || n === 'yes' || n === 'on';
 }
 
 async function sumDirBytes(dir: string): Promise<number> {

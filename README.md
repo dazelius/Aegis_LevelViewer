@@ -32,19 +32,30 @@ were looking at.
   recommended; enables the high-fidelity batch exporter).
 - `.env` at repo root with GitLab credentials — see `.env.example`.
 
-### Bake workstation
+### Platform deploy target (build-time bake)
 
-Anyone who can successfully run the app in **live mode** can produce a
-bundle. No extra dependencies.
+The recommended deploy path bakes the bundle **on the platform's build
+step** rather than committing it into git. Runtime containers never
+touch GitLab; the build container does the heavy lifting once per
+deploy.
 
-### Deploy target (bundle mode)
-
+Platform build environment needs:
 - Node.js 18+
-- **`git lfs pull` in the deploy step** — the bundle's textures/FBXes
-  are stored in LFS. Without this the server refuses to start with a
-  clear error message.
-- **No Unity, no GitLab access, no Git LFS at runtime** — everything
-  the server needs is in `data/bundle/`.
+- Git CLI + **Git LFS** installed on the build container
+- Env vars for the bake step (see below)
+- Enough ephemeral disk for the Aegis clone (~several GB) + the
+  resulting bundle (~hundreds of MB)
+
+Runtime container needs:
+- Node.js 18+
+- Nothing else — the bundle is self-contained.
+
+### Committed-bundle deploy target (alternative)
+
+If you'd rather bake locally and commit `data/bundle/` via Git LFS,
+see "Committing the bundle" below. Runtime host then only needs `git
+lfs pull` during deploy and no GitLab access. This works for
+platforms with tight build-time resource limits.
 
 ## Quick start (dev)
 
@@ -61,13 +72,8 @@ the Unity repo into `./data/repos/projectaegis/` (Assets/** only).
 
 ## Baking a deploy bundle
 
-Run once on a workstation that has a working live-mode setup:
-
-```bash
-npm run bake
-```
-
-This produces `data/bundle/`:
+Either run it locally (`npm run bake`) or let the platform do it via
+`npm run platform-build` — the output is the same.
 
 ```
 data/bundle/
@@ -84,47 +90,109 @@ so the deployed server doesn't need `sharp` / `@lunapaint/tga-codec` /
 The bake is **incremental** — re-running skips blobs already on disk.
 Delete `data/bundle/` to force a full rebake.
 
-### Committing the bundle
+## Deploying — platform build-time bake (recommended)
+
+For a managed Node host (Render, Railway, Fly.io, Cloud Run, Heroku-
+likes). The platform's build step runs the bake, so there's nothing to
+commit locally.
+
+### Build command
+```bash
+npm ci && npm run platform-build
+```
+`platform-build` = `bake` → `build`. The bake clones Aegis, pulls its
+LFS, parses scenes, transcodes textures and writes `data/bundle/`.
+`build` then compiles server TypeScript + web Vite bundle.
+
+### Start command
+```bash
+npm start
+```
+Server auto-detects `data/bundle/manifest.json` and runs in bundle
+mode. `GET /api/health` reports `{"mode":"bundle", ...}`.
+
+### Required env vars on the platform
+
+| Var                             | Stage       | Value                                                   |
+| ------------------------------- | ----------- | ------------------------------------------------------- |
+| `GITLAB_REPO2_URL`              | build       | Aegis repo HTTPS URL.                                   |
+| `GITLAB_REPO2_TOKEN`            | build       | GitLab Personal Access Token (read_repository).         |
+| `AEGISGRAM_POST_BAKE_CLEANUP`   | build       | `1` to delete `data/repos/` after bake (saves disk).    |
+| `AEGISGRAM_IFRAME_ORIGINS`      | runtime     | Space-separated origins allowed to embed in `<iframe>`. |
+| `PORT`                          | runtime     | Usually auto-injected by the platform.                  |
+| `NODE_ENV`                      | runtime     | `production`.                                           |
+
+> The `GITLAB_*` vars are consumed only during `npm run platform-build`;
+> the runtime process never references them because `bundleMode` is
+> active (the server auto-relaxes the "required" validation when a
+> bundle is present). You can scope them to the build step if your
+> platform allows it.
+
+### Resource sizing
+
+- Build container: ≥ 8 GB disk, ≥ 2 GB RAM. The Aegis sparse checkout
+  + LFS pull commonly runs 2–5 GB peak. Set
+  `AEGISGRAM_POST_BAKE_CLEANUP=1` to reclaim disk after the bundle is
+  written.
+- Runtime container: ≥ 512 MB RAM. The bundle reads are streamed; the
+  manifest stays resident in memory (< 10 MB for a few hundred scenes).
+
+### Build-time gotchas
+
+- **Git LFS must be installed on the build container.** Render /
+  Railway / Fly have it preinstalled; on Cloud Run buildpacks you may
+  need a prebuild hook (`apt-get install -y git-lfs`).
+- The bake can take **10–30 minutes** on first run depending on Aegis
+  repo size and platform CPU. Subsequent builds reuse the cloned
+  `data/repos/` if your platform preserves the build cache; otherwise
+  it's a fresh clone every time.
+- The platform's build timeout must accommodate this — default 15 min
+  Render/Railway settings may be tight for a cold bake.
+
+## Alternative: locally baked + committed bundle
+
+If your platform's build step is too restricted (Vercel serverless,
+Cloudflare Workers) or the bake is too slow to fit the build window,
+bake once locally and commit `data/bundle/` via Git LFS:
 
 ```bash
-git lfs install              # one-time per clone
+npm install
+npm run bake                           # creates data/bundle/
+git lfs install                        # one-time per clone
 git add .gitattributes data/bundle
 git commit -m "chore: refresh content bundle"
 git push
 ```
 
-Git LFS is configured for `data/bundle/blobs/**`, `data/bundle/scenes/**`
-and `data/bundle/fbx-materials/**` (see `.gitattributes`). The manifest
-itself stays as plain text so PR diffs surface bake metadata.
-
-## Deploying (bundle mode)
-
-Any host that can run Node + `git lfs pull`. Tested-shape deploy:
-
+Then on the platform:
 ```bash
 git clone <aegisgram-repo>
 cd aegisgram
 git lfs install
-git lfs pull                           # REQUIRED — pulls data/bundle/blobs/*
+git lfs pull                           # materializes data/bundle/blobs/*
 npm ci
-npm run build                          # builds server + web client
-npm start                              # listens on LEVEL_VIEWER_PORT (3101)
+npm run build
+npm start
 ```
 
-The server auto-detects bundle mode by the presence of
-`data/bundle/manifest.json`. `GET /api/health` reports `mode: "bundle"`.
+Git LFS is configured for `data/bundle/blobs/**`,
+`data/bundle/scenes/**`, and `data/bundle/fbx-materials/**`. The
+manifest stays as plain text so PR diffs surface bake metadata.
 
-### Environment variables
+## Environment variable reference
 
-| Var                         | Mode          | Purpose                                                   |
-| --------------------------- | ------------- | --------------------------------------------------------- |
-| `LEVEL_VIEWER_PORT`         | both          | Server port (default `3101`).                             |
-| `AEGISGRAM_BUNDLE_DIR`      | both          | Override bundle path (default `./data/bundle`).           |
-| `AEGISGRAM_IFRAME_ORIGINS`  | bundle        | Space-separated origins allowed to embed in `<iframe>`.   |
-| `GITLAB_REPO2_URL`          | live / bake   | Aegis repo URL (unused in bundle mode).                   |
-| `GITLAB_REPO2_TOKEN`        | live / bake   | Personal access token.                                    |
-| `UNITY_EDITOR_PATH`         | bake          | Path to Unity Editor for the batch exporter.              |
-| `AUTO_SYNC_ON_START`        | live          | `true` to pull Aegis at startup.                          |
+| Var                             | Mode          | Purpose                                                   |
+| ------------------------------- | ------------- | --------------------------------------------------------- |
+| `PORT`                          | both          | Platform-injected port (Render / Railway / Fly).          |
+| `LEVEL_VIEWER_PORT`             | both          | Dev-only override (wins over `PORT` if set).              |
+| `AEGISGRAM_BUNDLE_DIR`          | both          | Override bundle path (default `./data/bundle`).           |
+| `AEGISGRAM_IFRAME_ORIGINS`      | bundle        | Space-separated origins allowed to embed in `<iframe>`.   |
+| `AEGISGRAM_POST_BAKE_CLEANUP`   | bake          | `1` to remove `data/repos/` + `data/unity-export/`.       |
+| `GITLAB_REPO2_URL`              | live / bake   | Aegis repo URL (unused at runtime in bundle mode).        |
+| `GITLAB_REPO2_TOKEN`            | live / bake   | Personal access token.                                    |
+| `LEVEL_VIEWER_GIT_FETCH_LFS`    | live / bake   | `true` during bake (auto-forced). Optional in live dev.   |
+| `UNITY_EDITOR_PATH`             | bake          | Path to Unity Editor for the batch exporter.              |
+| `AUTO_SYNC_ON_START`            | live          | `true` to pull Aegis at startup.                          |
 
 In bundle mode, `/api/rebake` and `/api/sync` return HTTP 501 — the
 server has no Unity Editor and no GitLab access, so those operations
