@@ -126,6 +126,54 @@ a:hover { text-decoration: underline; }
   50%      { box-shadow: 0 0 0 5px rgba(138, 183, 255, 0.08); }
 }
 
+/* Bulk LFS prefetch badge. Shown while the server is downloading
+ * `.mat` + image pointers in the background, either after a cold
+ * startup or after Git Sync. Reads as "this is why some scenes
+ * still show magenta, and it's N/M done". The gradient-filled bar
+ * underneath the text gives a cheap progress indicator without an
+ * extra DOM element — uses the same brand colours as server-mode-live
+ * so both pieces of header chrome read as one family. */
+.lfs-prefetch-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 11px 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #c6d6ff;
+  background: rgba(138, 183, 255, 0.08);
+  border: 1px solid rgba(138, 183, 255, 0.35);
+  border-radius: 999px;
+  user-select: none;
+  overflow: hidden;
+  line-height: 1.5;
+}
+.lfs-prefetch-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(138, 183, 255, 0.25);
+  border-top-color: #8ab7ff;
+  border-right-color: #c4a6ff;
+  animation: scene-load-spin 1s linear infinite;
+  flex: 0 0 auto;
+}
+.lfs-prefetch-text {
+  font-variant-numeric: tabular-nums;
+  z-index: 1;
+}
+.lfs-prefetch-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #8ab7ff 0%, #c4a6ff 100%);
+  transition: width 400ms ease-out;
+  z-index: 0;
+}
+
 .app-header button {
   background: #1c2230;
   color: #e8ecf1;

@@ -16,6 +16,17 @@ interface HealthResponse {
   mode: ServerMode;
 }
 
+/** Shape returned by `/api/lfs-status` — matches the server's
+ *  `BulkProgress` interface in `lazyLfs.ts`. */
+interface LfsStatus {
+  running: boolean;
+  total: number;
+  done: number;
+  filesDone: number;
+  startedAt?: number;
+  lastError?: string;
+}
+
 export default function App() {
   const loc = useLocation();
   const nav = useNavigate();
@@ -25,6 +36,7 @@ export default function App() {
   // we know the mode avoids a flash-of-useless-button on slow
   // cold boots in bundle deploys.
   const [mode, setMode] = useState<ServerMode | null>(null);
+  const [lfsStatus, setLfsStatus] = useState<LfsStatus | null>(null);
 
   // Open the multiplayer socket once per tab as soon as the app
   // shell mounts. The manager auto-reconnects on drop and is a
@@ -58,12 +70,55 @@ export default function App() {
     };
   }, []);
 
+  // Poll the bulk-LFS prefetch progress while we're in live mode. We
+  // back off to 10 s when no run is active and tighten to 2 s while
+  // one is in flight — covers both the "server just started, big
+  // prefetch running" case and "user clicked Git Sync, wait for the
+  // secondary prefetch" case without hammering the endpoint in the
+  // quiet steady-state.
+  useEffect(() => {
+    if (mode !== 'live') return undefined;
+    let cancelled = false;
+    let timeoutId: number | undefined;
+
+    const poll = async (): Promise<void> => {
+      try {
+        const s = await apiGet<LfsStatus>('/api/lfs-status');
+        if (cancelled) return;
+        setLfsStatus(s);
+        const delay = s.running ? 2000 : 10_000;
+        timeoutId = window.setTimeout(poll, delay);
+      } catch {
+        if (cancelled) return;
+        // Back off hard on error — the endpoint may be transiently
+        // unavailable (e.g. server restarting); don't DoS it.
+        timeoutId = window.setTimeout(poll, 15_000);
+      }
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [mode]);
+
   async function handleSync() {
     if (syncing) return;
     setSyncing(true);
     try {
       await apiPost('/api/sync');
-      window.location.reload();
+      // Don't reload the whole app — keep the user's scene list /
+      // viewer state and just nudge the LFS-status poller so the
+      // post-sync bulk prefetch badge appears promptly. A full
+      // reload was the old hammer that also nuked the multiplayer
+      // socket and any in-progress scene load.
+      try {
+        const s = await apiGet<LfsStatus>('/api/lfs-status');
+        setLfsStatus(s);
+      } catch {
+        // ignore — the poller will catch up on its next tick
+      }
     } catch (err) {
       alert(`Sync failed: ${(err as Error).message}`);
     } finally {
@@ -153,6 +208,40 @@ export default function App() {
           >
             <span className="server-mode-dot" aria-hidden="true" />
             {mode === 'bundle' ? 'Bundle' : 'Live'}
+          </span>
+        )}
+        {/*
+          Bulk LFS prefetch progress. Shown while the server is
+          downloading `.mat` + image pointers in the background —
+          either right after startup or after a Git Sync click.
+          Surfaces the "why are some scenes magenta right now"
+          answer directly in the header so the user isn't guessing.
+        */}
+        {mode === 'live' && lfsStatus?.running && lfsStatus.total > 0 && (
+          <span
+            className="lfs-prefetch-badge"
+            title={
+              `백그라운드에서 재질/텍스처를 받고 있어요 — ` +
+              `${lfsStatus.filesDone} / ${lfsStatus.total} 파일 완료. ` +
+              `이 작업이 끝나기 전에 여는 씬은 일부 표면이 ` +
+              `분홍색으로 보일 수 있습니다.`
+            }
+          >
+            <span className="lfs-prefetch-spinner" aria-hidden="true" />
+            <span className="lfs-prefetch-text">
+              Assets {lfsStatus.filesDone.toLocaleString()} /{' '}
+              {lfsStatus.total.toLocaleString()}
+            </span>
+            <span
+              className="lfs-prefetch-bar"
+              aria-hidden="true"
+              style={{
+                width: `${Math.min(
+                  100,
+                  Math.round((lfsStatus.filesDone / Math.max(1, lfsStatus.total)) * 100),
+                )}%`,
+              }}
+            />
           </span>
         )}
         {/*

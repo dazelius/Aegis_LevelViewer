@@ -7,6 +7,7 @@ import express from 'express';
 import { bundleMode, config, getRepo2LocalDir, getGitUrlRewrites } from './config.js';
 import { applyUrlRewritesToRepo, syncUnityRepo } from './git/gitSync.js';
 import { startLfsProxy } from './git/lfsProxy.js';
+import { bulkFetchMaterialsAndTextures } from './git/lazyLfs.js';
 import { assetIndex } from './unity/assetIndex.js';
 import { bundleIndex } from './bundle/bundleIndex.js';
 import { apiRouter } from './api/routes.js';
@@ -167,6 +168,15 @@ async function bootstrap(): Promise<void> {
         if (repoExists) {
           console.log('[server] repo already on disk — building asset index first, syncing in background');
           await assetIndex.build();
+          // Kick off the bulk prefetch for .mat + image pointers
+          // right after the index is first available. These files
+          // are small and shared across scenes — downloading them
+          // once at startup beats the per-scene lazy-fetch penalty
+          // (which otherwise shows up as magenta materials for the
+          // first few seconds of every new scene open).
+          bulkFetchMaterialsAndTextures(repoDir, assetIndex).catch((err) => {
+            console.warn('[server] bulk LFS prefetch error (non-fatal):', err);
+          });
           // Fire-and-forget: sync will update the repo and rebuild
           // the index when done, picking up any upstream changes.
           syncUnityRepo()
@@ -176,6 +186,11 @@ async function bootstrap(): Promise<void> {
               );
               await assetIndex.build();
               console.log('[server] asset index rebuilt after sync');
+              // Re-run bulk prefetch after sync so any new pointers
+              // introduced by the pull get picked up too.
+              bulkFetchMaterialsAndTextures(repoDir, assetIndex).catch((err) => {
+                console.warn('[server] post-sync bulk LFS prefetch error (non-fatal):', err);
+              });
             })
             .catch((err) => {
               console.warn('[server] background sync error (non-fatal):', err);
@@ -189,6 +204,9 @@ async function bootstrap(): Promise<void> {
             `[server] git sync: ${result.action}${result.head ? ` @ ${result.head}` : ''}`,
           );
           await assetIndex.build();
+          bulkFetchMaterialsAndTextures(repoDir, assetIndex).catch((err) => {
+            console.warn('[server] bulk LFS prefetch error (non-fatal):', err);
+          });
         }
       }
     } catch (err) {

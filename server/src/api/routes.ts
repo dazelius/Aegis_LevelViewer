@@ -50,6 +50,8 @@ import {
   triggerLfsFetch,
   ensureLfsFile,
   ensureSceneYamlPointersReady,
+  bulkFetchMaterialsAndTextures,
+  getBulkPrefetchProgress,
   isLfsPointerBuf,
 } from '../git/lazyLfs.js';
 import { consumeLfsPointerMaterialStats } from '../unity/materialParser.js';
@@ -1005,8 +1007,35 @@ apiRouter.post('/sync', async (_req: Request, res: Response) => {
     const result = await syncUnityRepo({ force: true });
     // Rebuild index after pull.
     await assetIndex.build();
+    // Re-run the bulk `.mat` + image prefetch so any new / changed
+    // pointers introduced by the sync get downloaded in one pass
+    // rather than piecemeal as the user navigates. Fire-and-forget:
+    // the sync response returns immediately and the client polls
+    // /api/lfs-status to track progress.
+    bulkFetchMaterialsAndTextures(getRepo2LocalDir(), assetIndex).catch((err) => {
+      console.warn('[server] post-sync bulk LFS prefetch error (non-fatal):', err);
+    });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
+});
+
+/**
+ * Current state of the background `.mat` + image bulk LFS prefetch.
+ * Client polls this while a run is active to render a header badge
+ * like "Assets: 450 / 1200" so the user understands why some scenes
+ * still show magenta surfaces right after a cold deploy or a Git
+ * Sync — and can see the remaining work draining in real time.
+ */
+apiRouter.get('/lfs-status', (_req: Request, res: Response) => {
+  if (bundleMode) {
+    // In bundle mode no LFS fetch ever runs from the server; clients
+    // that care about this endpoint are always live-mode clients, but
+    // we still return a well-formed stub so the UI code path is
+    // uniform.
+    res.json({ running: false, total: 0, done: 0, filesDone: 0 });
+    return;
+  }
+  res.json(getBulkPrefetchProgress());
 });

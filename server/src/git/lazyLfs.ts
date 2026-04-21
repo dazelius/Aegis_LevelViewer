@@ -102,6 +102,44 @@ function extractGuidsFromFile(absPath: string): string[] {
 /** Per-absolute-path in-flight deduplication. */
 const inFlight = new Map<string, Promise<void>>();
 
+// ---------------------------------------------------------------------------
+// Bulk prefetch progress (materials + textures)
+// ---------------------------------------------------------------------------
+//
+// `.mat` and image files are small and shared across scenes, so the
+// per-scene lazy fetch pattern we use for FBX meshes is wasteful for
+// them. On startup / after a Git Sync we instead kick off a single
+// bulk prefetch that materialises every `.mat` + image LFS pointer in
+// the repo in one background pass. UI polls `/api/lfs-status` (see
+// getBulkPrefetchProgress below) to show a small "Assets: X / Y"
+// badge while it runs.
+interface BulkProgress {
+  /** Is a bulk prefetch currently running? */
+  running: boolean;
+  /** Total pointer paths we decided to fetch. */
+  total: number;
+  /** How many batches have completed (success or failure). */
+  done: number;
+  /** Number of individual paths in completed batches. */
+  filesDone: number;
+  /** Monotonic ms timestamp when the current run started. */
+  startedAt: number;
+  /** When non-empty, the most recent batch error (rotates). */
+  lastError?: string;
+}
+
+let bulkProgress: BulkProgress = {
+  running: false,
+  total: 0,
+  done: 0,
+  filesDone: 0,
+  startedAt: 0,
+};
+
+export function getBulkPrefetchProgress(): BulkProgress {
+  return { ...bulkProgress };
+}
+
 /** Has `git lfs env` diagnostic already been emitted? First failure is
  *  usually all we need to diagnose endpoint/auth issues. */
 let lfsEnvReported = false;
@@ -358,6 +396,116 @@ export async function ensureSceneYamlPointersReady(
     new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
   ]);
   return pointerPaths.length;
+}
+
+/**
+ * Image file extensions we want eagerly fetched (not lazy per-scene):
+ * textures are small, reused across scenes, and the first paint looks
+ * awful without them (flat-colour everything).
+ *
+ * FBX / OBJ intentionally stay on the per-scene lazy path — a single
+ * mesh can be 100s of MB and pulling them all at startup blocks the
+ * server for 20+ minutes on a cold deploy.
+ */
+const IMAGE_EXTS = new Set([
+  '.png', '.jpg', '.jpeg', '.tga', '.psd', '.bmp', '.webp', '.gif', '.hdr', '.exr',
+]);
+
+/**
+ * Background fetch of every `.mat` + image LFS pointer in the repo.
+ * Fire-and-forget: resolves when all batches have run (success or
+ * failure), but callers don't await it.
+ *
+ * Safe to call multiple times — if a run is already in progress the
+ * second call is a no-op (returns the in-flight promise). That's the
+ * right semantics for both startup and post-sync invocations.
+ */
+let bulkInFlight: Promise<void> | null = null;
+
+export function bulkFetchMaterialsAndTextures(
+  repoDir: string,
+  assetIndex: {
+    allByExt: (ext: string) => Array<{ absPath: string; ext: string; relPath: string }>;
+  },
+): Promise<void> {
+  if (bulkInFlight) return bulkInFlight;
+
+  const scan = async (): Promise<void> => {
+    // Gather every pointer we care about. We re-stat rather than
+    // trusting the asset index because LFS status changes over time
+    // (lazy-per-scene fetches may have already smudged some files).
+    const candidates: string[] = [];
+    for (const rec of assetIndex.allByExt('.mat')) {
+      if (isLfsPointerSync(rec.absPath)) candidates.push(rec.absPath);
+    }
+    for (const ext of IMAGE_EXTS) {
+      for (const rec of assetIndex.allByExt(ext)) {
+        if (isLfsPointerSync(rec.absPath)) candidates.push(rec.absPath);
+      }
+    }
+
+    if (candidates.length === 0) {
+      console.log('[lazyLfs] bulk prefetch: nothing to do (no .mat / image pointers)');
+      return;
+    }
+
+    console.log(
+      `[lazyLfs] bulk prefetch: ${candidates.length} pointer(s) ` +
+        `(.mat + images) — batching in chunks of ${BATCH_SIZE}`,
+    );
+
+    bulkProgress = {
+      running: true,
+      total: candidates.length,
+      done: 0,
+      filesDone: 0,
+      startedAt: Date.now(),
+    };
+
+    // Chunk into our existing BATCH_SIZE so each `git lfs fetch` call
+    // stays under the OS arg-list limit and shares the repo lock with
+    // any in-flight scene-level prefetches.
+    for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+      const chunk = candidates.slice(i, i + BATCH_SIZE);
+      // Filter out paths that have already been materialised by a
+      // concurrent lazy fetch between scan time and now — saves work
+      // and avoids pointless log noise.
+      const stillPointers = chunk.filter((p) => isLfsPointerSync(p));
+      if (stillPointers.length === 0) {
+        bulkProgress = {
+          ...bulkProgress,
+          done: bulkProgress.done + 1,
+          filesDone: bulkProgress.filesDone + chunk.length,
+        };
+        continue;
+      }
+      try {
+        await registerBatch(stillPointers, repoDir);
+      } catch (err) {
+        bulkProgress = {
+          ...bulkProgress,
+          lastError: err instanceof Error ? err.message : String(err),
+        };
+      }
+      bulkProgress = {
+        ...bulkProgress,
+        done: bulkProgress.done + 1,
+        filesDone: bulkProgress.filesDone + chunk.length,
+      };
+    }
+
+    const elapsedSec = ((Date.now() - bulkProgress.startedAt) / 1000).toFixed(1);
+    console.log(
+      `[lazyLfs] bulk prefetch done in ${elapsedSec}s — ` +
+        `${bulkProgress.filesDone} file(s) across ${bulkProgress.done} batch(es)`,
+    );
+    bulkProgress = { ...bulkProgress, running: false };
+  };
+
+  bulkInFlight = scan().finally(() => {
+    bulkInFlight = null;
+  });
+  return bulkInFlight;
 }
 
 export function triggerLazyLfsForScene(sceneAbsPath: string, repoDir: string): void {
