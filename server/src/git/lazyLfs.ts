@@ -70,6 +70,18 @@ const BINARY_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.tga', '.psd', '.bmp', '.webp', '.gif', '.hdr', '.exr',
 ]);
 
+/**
+ * Extensions that are YAML text in theory but LFS-tracked in practice on
+ * this project. If any of these is still a pointer when scene parsing
+ * runs, the server silently produces a scene with missing materials /
+ * prefab contents — the viewer then paints every surface magenta because
+ * three.js falls back to its default material when ours returns
+ * undefined. These MUST be materialised before `parseScene` is called,
+ * so they have their own pre-parse synchronous fetch pass
+ * (`ensureSceneYamlPointersReady` below).
+ */
+const SCENE_YAML_EXTS = new Set(['.mat', '.prefab', '.asset', '.controller']);
+
 function extractGuidsFromFile(absPath: string): string[] {
   try {
     const text = fsSync.readFileSync(absPath, 'utf8');
@@ -295,6 +307,59 @@ function registerBatch(absPaths: string[], repoDir: string): Promise<void> {
  * @param sceneAbsPath  Absolute path to the .unity file.
  * @param repoDir       Root of the git clone (from `getRepo2LocalDir()`).
  */
+/**
+ * Synchronously materialise every `.mat` / `.prefab` / `.asset`
+ * referenced (transitively via GUID) by a scene file that is still an
+ * LFS pointer on disk. This MUST be called right after the scene file
+ * itself is smudged and BEFORE `parseScene` runs — otherwise the
+ * material parser reads pointer-text, silently produces no materials,
+ * and the renderer paints every surface magenta (three.js's default
+ * material when ours returns undefined).
+ *
+ * Race-bounded by `timeoutMs`: if the LFS endpoint is slow we stop
+ * blocking and let the caller serve the scene with whatever materials
+ * did land. On a subsequent request the inFlight map will have those
+ * pointers registered so the next parse picks them up.
+ *
+ * First-pass only — does not recurse into fetched .prefab files to
+ * pull in their own referenced .mat pointers. That's a deliberate
+ * trade-off against the proxy timeout; nested prefab material chains
+ * are rare enough that one pass covers the common case.
+ *
+ * @returns Number of pointer paths queued (0 == nothing to do).
+ */
+export async function ensureSceneYamlPointersReady(
+  sceneAbsPath: string,
+  repoDir: string,
+  timeoutMs: number,
+): Promise<number> {
+  const guids = extractGuidsFromFile(sceneAbsPath);
+  if (guids.length === 0) return 0;
+
+  const pointerPaths: string[] = [];
+  for (const guid of guids) {
+    const rec = assetIndex.get(guid);
+    if (!rec) continue;
+    if (!SCENE_YAML_EXTS.has(rec.ext)) continue;
+    if (isLfsPointerSync(rec.absPath)) pointerPaths.push(rec.absPath);
+  }
+
+  if (pointerPaths.length === 0) return 0;
+
+  console.log(
+    `[lazyLfs] scene ${path.basename(sceneAbsPath)}: ` +
+      `pre-parse fetch of ${pointerPaths.length} YAML pointer(s) ` +
+      `(.mat/.prefab/.asset) — blocking up to ${timeoutMs}ms`,
+  );
+
+  const batchDone = registerBatch(pointerPaths, repoDir);
+  await Promise.race([
+    batchDone.catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
+  return pointerPaths.length;
+}
+
 export function triggerLazyLfsForScene(sceneAbsPath: string, repoDir: string): void {
   const guids = extractGuidsFromFile(sceneAbsPath);
   if (guids.length === 0) return;

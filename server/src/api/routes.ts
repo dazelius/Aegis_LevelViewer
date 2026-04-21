@@ -49,8 +49,10 @@ import {
   triggerLazyLfsForScene,
   triggerLfsFetch,
   ensureLfsFile,
+  ensureSceneYamlPointersReady,
   isLfsPointerBuf,
 } from '../git/lazyLfs.js';
+import { consumeLfsPointerMaterialStats } from '../unity/materialParser.js';
 import { bundleMode, config, getAssetsDir, getRepo2LocalDir } from '../config.js';
 import { bundleIndex, isBundleLfsPointer } from '../bundle/bundleIndex.js';
 import {
@@ -206,12 +208,20 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
   // request: the user clicks a level, the server does the "sync on
   // click" work, and the scene JSON arrives in one response.
   //
-  // Budget: 22 s leaves ~8 s of headroom for scene parse + JSON
-  // serialisation before the proxy's ~30 s kill. If we still have a
-  // pointer at the deadline we fall back to the old 409 contract so
-  // the client's retry loop (SceneLoadOverlay) takes over.
+  // Budget: we need to fit scene-fetch + .mat-pre-fetch + scene-parse
+  // + JSON serialise under the platform's ~30 s proxy kill. Rough
+  // allocation:
+  //     scene LFS fetch      up to 16 s
+  //     .mat/.prefab prefetch up to  6 s   (ensureSceneYamlPointersReady)
+  //     parseScene + JSON           ~2–4 s
+  //     headroom                    ~4–6 s
+  // If the scene blob exceeds the 16 s window we fall back to the old
+  // 409 contract so the client's retry loop (SceneLoadOverlay) takes
+  // over — the in-flight fetch continues in the background and the
+  // next retry typically joins the same promise and lands in under
+  // another 16 s.
   const repoDir = getRepo2LocalDir();
-  const SYNC_WAIT_MS = 22_000;
+  const SYNC_WAIT_MS = 16_000;
   try {
     const head = await fs.readFile(absPath);
     if (isLfsPointerBuf(head)) {
@@ -247,14 +257,43 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
     // Non-fatal — parseScene below will surface a clearer error.
   }
 
-  // Kick off a background LFS fetch for every binary asset this scene
-  // references that is still a pointer on disk. Does not block the scene
-  // response — the JSON is returned immediately and Three.js starts
+  // Pre-parse: materialise every `.mat` / `.prefab` / `.asset` the
+  // scene references that is still an LFS pointer. Without this pass,
+  // the material parser reads pointer-text as YAML, silently produces
+  // undefined materials, and three.js paints every surface magenta.
+  // Bounded at ~6 s so a slow LFS endpoint degrades gracefully rather
+  // than blowing the platform's ~30 s proxy timeout — any materials
+  // that don't make it in time will be re-requested on the client's
+  // next scene open once the inFlight promise completes.
+  try {
+    await ensureSceneYamlPointersReady(absPath, repoDir, 6_000);
+  } catch {
+    // Never propagate — missing materials are a cosmetic regression,
+    // not a reason to 500 the whole scene request.
+  }
+
+  // Kick off a background LFS fetch for every binary asset (FBX,
+  // textures) this scene references that is still a pointer. Fire
+  // and forget — the JSON is returned immediately and three.js starts
   // rendering while the downloads race the browser render pipeline.
   triggerLazyLfsForScene(absPath, repoDir);
 
   try {
     const parsed = await parseScene(absPath, relPath);
+    // Drain the material-parser's pointer counter so we get one
+    // diagnostic line per scene instead of one per (materialGuid x
+    // referencing node), and so the next scene's counters start
+    // fresh. Log only when we actually hit any.
+    const matPointerStats = consumeLfsPointerMaterialStats();
+    if (matPointerStats.distinct > 0) {
+      console.warn(
+        `[sceneRoute] ${relPath}: ${matPointerStats.distinct} distinct ` +
+          `.mat file(s) were still LFS pointers during parse ` +
+          `(${matPointerStats.hits} total look-ups). ` +
+          `Client will see magenta surfaces until a re-open picks up ` +
+          `the now-queued blobs.`,
+      );
+    }
     // Tag the YAML pipeline's output with a stable format string so the
     // client can route it to the legacy renderer. The Unity batch exporter
     // puts its own `format` in the JSON root.

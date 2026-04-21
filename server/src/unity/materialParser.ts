@@ -3,6 +3,7 @@ import path from 'node:path';
 import { loadUnityDocs, preprocessUnityYaml } from './yamlSchema.js';
 import { assetIndex } from './assetIndex.js';
 import { unityColorToRgba } from './coordTransform.js';
+import { isLfsPointerBuf } from '../git/lazyLfs.js';
 
 /**
  * Per-texture reference extracted from a Unity material's `m_TexEnvs`. The
@@ -251,6 +252,35 @@ function deriveRenderMode(
   return 'Opaque';
 }
 
+// Log-once de-dup so a scene that references the same unfetched .mat
+// 500 times doesn't spam the server log 500 times. Count is exposed
+// via `getLfsPointerMaterialStats()` so a caller can decide to kick
+// off a synchronous fetch and retry.
+const LFS_POINTER_MAT_SEEN = new Set<string>();
+let LFS_POINTER_MAT_HITS = 0;
+function logLfsPointerMaterialOnce(relPath: string): void {
+  LFS_POINTER_MAT_HITS += 1;
+  if (LFS_POINTER_MAT_SEEN.has(relPath)) return;
+  LFS_POINTER_MAT_SEEN.add(relPath);
+  console.warn(
+    `[materialParser] ${relPath} is still an LFS pointer — material returned ` +
+      `as undefined. Scene will render with three.js default (magenta) ` +
+      `until the .mat blob lands on disk.`,
+  );
+}
+
+/**
+ * Returns and resets the pointer-hit counter. Useful right after a
+ * scene parse to decide whether it's worth kicking off a secondary
+ * LFS fetch pass for `.mat` files before serving the JSON.
+ */
+export function consumeLfsPointerMaterialStats(): { hits: number; distinct: number } {
+  const out = { hits: LFS_POINTER_MAT_HITS, distinct: LFS_POINTER_MAT_SEEN.size };
+  LFS_POINTER_MAT_HITS = 0;
+  LFS_POINTER_MAT_SEEN.clear();
+  return out;
+}
+
 export async function parseMaterialByGuid(guid: string): Promise<ParsedMaterial | undefined> {
   if (!guid) return undefined;
   const key = guid.toLowerCase();
@@ -260,12 +290,24 @@ export async function parseMaterialByGuid(guid: string): Promise<ParsedMaterial 
   const rec = assetIndex.get(key);
   if (!rec || rec.ext !== '.mat') return undefined;
 
-  let raw: string;
+  // `.mat` files on this project are LFS-tracked — when the lazy LFS
+  // fetch hasn't materialised the blob yet we see the 130-byte pointer
+  // text. Reading that as YAML would silently "succeed" with an empty
+  // doc stream, then materials come back as undefined and the viewer
+  // paints every surface magenta (three.js's default-material fallback).
+  // Detect pointers explicitly and log once per GUID so a real missing
+  // material is still distinguishable from a not-yet-fetched one.
+  let rawBuf: Buffer;
   try {
-    raw = await fs.readFile(rec.absPath, 'utf8');
+    rawBuf = await fs.readFile(rec.absPath);
   } catch {
     return undefined;
   }
+  if (isLfsPointerBuf(rawBuf)) {
+    logLfsPointerMaterialOnce(rec.relPath);
+    return undefined;
+  }
+  const raw = rawBuf.toString('utf8');
 
   const pre = preprocessUnityYaml(raw);
   let docs: unknown[];
