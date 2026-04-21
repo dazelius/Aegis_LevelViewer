@@ -48,6 +48,7 @@ import { syncUnityRepo } from '../git/gitSync.js';
 import {
   triggerLazyLfsForScene,
   triggerLfsFetch,
+  ensureLfsFile,
   isLfsPointerBuf,
 } from '../git/lazyLfs.js';
 import { bundleMode, config, getAssetsDir, getRepo2LocalDir } from '../config.js';
@@ -195,30 +196,52 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
     return;
   }
 
-  // If the scene file itself is still a Git LFS pointer, DO NOT await
-  // the fetch here. The platform reverse-proxy typically kills the
-  // upstream request at ~30 s (resulting in a 502 for the client), but
-  // a single LFS download can legitimately take longer on a cold
-  // cache. Instead we kick off the fetch in the background and return
-  // 409 immediately — the client retries with backoff and the second
-  // request hits the now-materialised file.
+  // If the scene file itself is still a Git LFS pointer, try to
+  // materialise it synchronously within the platform proxy's
+  // upstream timeout (~30 s). The previous implementation returned
+  // 409 immediately and relied purely on client polling, which —
+  // when the repo lock was busy with a concurrent gitSync pull —
+  // produced 15+ visible "still a pointer" rounds for what is really
+  // a 2–5 s LFS download. Blocking here collapses that into a single
+  // request: the user clicks a level, the server does the "sync on
+  // click" work, and the scene JSON arrives in one response.
+  //
+  // Budget: 22 s leaves ~8 s of headroom for scene parse + JSON
+  // serialisation before the proxy's ~30 s kill. If we still have a
+  // pointer at the deadline we fall back to the old 409 contract so
+  // the client's retry loop (SceneLoadOverlay) takes over.
   const repoDir = getRepo2LocalDir();
+  const SYNC_WAIT_MS = 22_000;
   try {
     const head = await fs.readFile(absPath);
     if (isLfsPointerBuf(head)) {
-      const inFlight = triggerLfsFetch(absPath, repoDir);
-      if (inFlight) {
+      console.log(
+        `[lazyLfs] scene ${relPath} is a pointer — ` +
+          `attempting synchronous fetch+smudge (up to ${SYNC_WAIT_MS}ms)`,
+      );
+      // ensureLfsFile either awaits an in-flight batch (scheduled by
+      // a previous click / preload) or registers a fresh single-file
+      // fetch and races it against the timeout. It never rejects.
+      await ensureLfsFile(absPath, repoDir, SYNC_WAIT_MS);
+      const head2 = await fs.readFile(absPath);
+      if (isLfsPointerBuf(head2)) {
+        // Timeout elapsed without the blob landing. Ensure a fetch is
+        // still queued (in case ensureLfsFile's in-flight promise got
+        // cleaned up at the timeout boundary) and hand off to the
+        // client's retry loop.
+        triggerLfsFetch(absPath, repoDir);
         console.log(
-          `[lazyLfs] scene ${relPath} is a pointer — ` +
-            `returning 409 while background fetch runs`,
+          `[lazyLfs] scene ${relPath} still a pointer after ${SYNC_WAIT_MS}ms — ` +
+            `returning 409 for client retry`,
         );
         res.status(409).json({
           error: 'lfs-pointer',
-          hint: 'Scene file is being downloaded from Git LFS — retry shortly.',
+          hint: 'Scene file is still being downloaded from Git LFS — retry shortly.',
           relPath,
         });
         return;
       }
+      console.log(`[lazyLfs] scene ${relPath} smudged synchronously — serving now`);
     }
   } catch {
     // Non-fatal — parseScene below will surface a clearer error.
