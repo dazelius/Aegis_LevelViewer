@@ -99,15 +99,16 @@ let lfsEnvReported = false;
 async function reportLfsEnvOnce(repoDir: string): Promise<void> {
   if (lfsEnvReported) return;
   lfsEnvReported = true;
+
+  const scrubCreds = (s: string): string =>
+    s.replace(/(oauth2|x-access-token|git):([^@\s]+)@/g, '$1:***@');
+
   try {
     const git = simpleGit(repoDir).env({
       GIT_TERMINAL_PROMPT: '0',
     } as Record<string, string>);
     const out = await git.raw(['lfs', 'env']);
-    const scrubbed = String(out)
-      // Strip any oauth2:<token>@ that leaked through so we don't
-      // dump credentials to platform log stores.
-      .replace(/(oauth2|x-access-token|git):([^@\s]+)@/g, '$1:***@');
+    const scrubbed = scrubCreds(String(out));
     console.log('[lazyLfs] === git lfs env (one-time diagnostic) ===');
     for (const line of scrubbed.split('\n')) {
       if (line.trim().length > 0) console.log(`[lazyLfs]   ${line}`);
@@ -116,6 +117,44 @@ async function reportLfsEnvOnce(repoDir: string): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[lazyLfs] git lfs env diagnostic failed: ${msg}`);
+  }
+
+  // Dump the most recent `.git/lfs/logs/*.log` file. When git-lfs runs
+  // with `skipdownloaderrors=true`, per-object errors (HTTP 401 / 404 /
+  // batch rejection) are NOT raised — the command exits 0 and records
+  // everything to these per-run log files. This is usually where the
+  // real reason (bad credentials, LFS server URL unreachable, missing
+  // blob upstream, wrong LFS endpoint) shows up.
+  try {
+    const logsDir = path.join(repoDir, '.git', 'lfs', 'logs');
+    if (!fsSync.existsSync(logsDir)) {
+      console.log('[lazyLfs] no .git/lfs/logs/ directory — git-lfs may not have attempted a transfer yet');
+      return;
+    }
+    const entries = fsSync
+      .readdirSync(logsDir)
+      .filter((f) => f.endsWith('.log'))
+      .map((f) => ({ f, t: fsSync.statSync(path.join(logsDir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t);
+    if (entries.length === 0) {
+      console.log('[lazyLfs] no .log files in .git/lfs/logs/');
+      return;
+    }
+    const newest = entries[0];
+    const fullPath = path.join(logsDir, newest.f);
+    const raw = fsSync.readFileSync(fullPath, 'utf8');
+    const scrubbed = scrubCreds(raw);
+    const truncated = scrubbed.length > 4000
+      ? `${scrubbed.slice(0, 4000)}\n…(truncated, see ${fullPath})`
+      : scrubbed;
+    console.log(`[lazyLfs] === most recent LFS log: ${newest.f} ===`);
+    for (const line of truncated.split('\n')) {
+      if (line.length > 0) console.log(`[lazyLfs]   ${line}`);
+    }
+    console.log('[lazyLfs] === end LFS log ===');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[lazyLfs] LFS log dump failed: ${msg}`);
   }
 }
 
@@ -162,15 +201,22 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       console.log(`[lazyLfs] smudged ${batch.length} file(s)`);
       // Verify: if the first path in the batch is STILL a pointer after
       // smudge, something went wrong upstream — surface that clearly so
-      // we don't silently serve empty scene data.
+      // we don't silently serve empty scene data. This is the common
+      // path when `lfs.skipdownloaderrors=true` hides real failures:
+      // git-lfs exits 0 but no blob landed on disk.
       if (batch.length > 0) {
         const firstAbs = absFilePaths[i];
         if (firstAbs && fsSync.existsSync(firstAbs) && isLfsPointerSync(firstAbs)) {
           console.warn(
             `[lazyLfs] post-smudge check: ${batch[0]} is STILL an LFS ` +
-              `pointer — LFS server likely rejected the batch request ` +
-              `(auth/network). Check \`git lfs env\` on this host.`,
+              `pointer — LFS server silently rejected the batch ` +
+              `(auth/network/missing). See LFS log dump below for the ` +
+              `real error.`,
           );
+          // Fire the one-shot diagnostic — both `git lfs env` and the
+          // most recent `.git/lfs/logs/*.log` dump. Async but we don't
+          // await it so we don't block the fetch chain on diagnostics.
+          reportLfsEnvOnce(repoDir).catch(() => {});
         }
       }
     } catch (err) {
