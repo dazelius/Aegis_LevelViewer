@@ -168,7 +168,27 @@ path produces the same artifacts.
 
 If your platform's build step is too restricted (Vercel serverless,
 Cloudflare Workers) or the bake is too slow to fit the build window,
-bake once locally and commit `data/bundle/` via Git LFS:
+bake once locally and commit `data/bundle/` via Git LFS.
+
+The easy path is the bundled orchestrator:
+
+```bash
+npm install
+npm run publish-bundle                 # bake (incremental) + stage + commit + push
+```
+
+That script is `scripts/publish-bundle.mjs` — it runs the bake,
+verifies `manifest.json`, stages ONLY the bundle paths (so unrelated
+WIP edits stay uncommitted), writes a timestamped commit message
+carrying the scene count + source revision, and pushes to the
+current branch's upstream. Useful flags:
+
+- `npm run publish-bundle -- --skip-bake` — commit the bundle on
+  disk as-is (skips step 1, handy if the bake just ran).
+- `npm run publish-bundle -- --no-push` — local commit only, push
+  by hand later.
+
+Or the manual equivalent if you prefer wiring it yourself:
 
 ```bash
 npm install

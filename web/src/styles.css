@@ -72,6 +72,60 @@ a:hover { text-decoration: underline; }
   color: transparent;
 }
 .app-header .spacer { flex: 1; }
+
+/* Server-mode badge in the header — tells the user at a glance
+ * whether the backend is live (talks to GitLab) or bundle (reads a
+ * frozen content pack). Colour codes match the semantic: live uses
+ * the brand blue-purple gradient (same as nav-link active state),
+ * bundle uses a neutral slate so it reads as "safe, read-only
+ * production surface" rather than "warning". */
+.server-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  user-select: none;
+  line-height: 1.6;
+}
+.server-mode-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.server-mode-live {
+  color: #c6d6ff;
+  background: linear-gradient(
+    90deg,
+    rgba(138, 183, 255, 0.16),
+    rgba(196, 166, 255, 0.16)
+  );
+  border-color: rgba(138, 183, 255, 0.45);
+}
+.server-mode-live .server-mode-dot {
+  background: #8ab7ff;
+  box-shadow: 0 0 0 3px rgba(138, 183, 255, 0.2);
+  animation: server-mode-pulse 2.2s ease-in-out infinite;
+}
+.server-mode-bundle {
+  color: #a8b4c6;
+  background: rgba(42, 50, 66, 0.55);
+  border-color: rgba(74, 85, 102, 0.6);
+}
+.server-mode-bundle .server-mode-dot {
+  background: #7c8699;
+}
+@keyframes server-mode-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(138, 183, 255, 0.2); }
+  50%      { box-shadow: 0 0 0 5px rgba(138, 183, 255, 0.08); }
+}
+
 .app-header button {
   background: #1c2230;
   color: #e8ecf1;
@@ -1784,5 +1838,472 @@ body.play-mode .app-header { display: none; }
 .feedback-bubble.is-resolved .feedback-bubble-tail {
   border-right-color: rgba(120, 230, 160, 0.55);
   border-bottom-color: rgba(120, 230, 160, 0.55);
+}
+
+/* ===================================================================
+ * Scenes Explore page (/)
+ *
+ * Instagram Explore-style thumbnail grid. Each tile's cover is the
+ * most recent feedback screenshot for that scene (pulled client-side
+ * from /api/feedbacks/all); scenes without feedback fall back to a
+ * branded initial-letter placeholder so the grid stays visually even.
+ * Production scenes render first; Dev-only collapses into a <details>
+ * so the primary review loop isn't crowded by the sandbox maps.
+ * ================================================================= */
+
+.scenes-page {
+  width: 100%;
+  overflow-y: auto;
+  padding: 22px clamp(16px, 3vw, 40px) 60px;
+}
+
+.scenes-head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #1e2330;
+}
+.scenes-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.scenes-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.scenes-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  background: linear-gradient(90deg, #8ab7ff 0%, #c4a6ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.scenes-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: #8a93a5;
+}
+
+.scenes-search-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 340px;
+  min-width: 220px;
+}
+.scenes-search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 14px;
+  color: #6c7689;
+  pointer-events: none;
+}
+.scenes-search {
+  width: 100%;
+  padding: 8px 32px 8px 32px;
+  font: inherit;
+  font-size: 13px;
+  color: #e8ecf1;
+  background: #0d1118;
+  border: 1px solid #232833;
+  border-radius: 999px;
+  outline: none;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.scenes-search:focus {
+  border-color: rgba(138, 183, 255, 0.55);
+  background: #101622;
+}
+.scenes-search::placeholder {
+  color: #5d6679;
+}
+.scenes-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: #8a93a5;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.scenes-search-clear:hover {
+  color: #e8ecf1;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.scenes-filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.scene-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #0d1118;
+  border: 1px solid #232833;
+  border-radius: 999px;
+  color: #c2cbdc;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.scene-filter-chip:hover {
+  background: #161c26;
+  border-color: #2f3949;
+  color: #ecf0f7;
+}
+.scene-filter-chip.is-active[data-filter='all'] {
+  background: rgba(140, 180, 255, 0.12);
+  border-color: rgba(140, 180, 255, 0.5);
+  color: #c6d6ff;
+}
+.scene-filter-chip.is-active[data-filter='hot'] {
+  background: rgba(138, 183, 255, 0.14);
+  border-color: rgba(138, 183, 255, 0.55);
+  color: #b5cfff;
+}
+.scene-filter-chip.is-active[data-filter='open'] {
+  background: rgba(255, 207, 106, 0.14);
+  border-color: rgba(255, 207, 106, 0.55);
+  color: #ffd487;
+}
+.scene-filter-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* -- Section frames ------------------------------------------------ */
+
+.scene-section {
+  margin-bottom: 28px;
+}
+.scene-section[open] > .scene-section-head,
+.scene-section > .scene-section-head {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+  cursor: default;
+}
+.scene-section-dev > summary.scene-section-head {
+  cursor: pointer;
+  padding: 10px 12px;
+  background: #11151d;
+  border: 1px solid #1d2330;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.scene-section-dev > summary.scene-section-head:hover {
+  background: #141a24;
+  border-color: #263040;
+}
+.scene-section-dev > summary.scene-section-head::-webkit-details-marker {
+  display: none;
+}
+.scene-section-dev > summary.scene-section-head::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: #6c7689;
+  font-size: 11px;
+  transition: transform 120ms ease;
+}
+.scene-section-dev[open] > summary.scene-section-head::before {
+  transform: rotate(90deg);
+}
+
+.scene-section-heading {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #c7cfdc;
+}
+.scene-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #9aa4b8;
+  background: #1a1f2a;
+  border: 1px solid #252b38;
+  border-radius: 999px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.scene-section-desc {
+  margin: 0;
+  font-size: 11px;
+  color: #6c7689;
+  letter-spacing: 0.1px;
+}
+
+/* -- Grid + tiles -------------------------------------------------- */
+
+.scene-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.scene-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #12161f;
+  border: 1px solid #1d2330;
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 140ms ease, border-color 140ms ease,
+    box-shadow 140ms ease;
+  will-change: transform;
+}
+.scene-tile:hover {
+  transform: translateY(-2px);
+  border-color: #2f384a;
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+  text-decoration: none;
+}
+.scene-tile:focus-visible {
+  outline: 2px solid rgba(138, 183, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.scene-tile-thumb-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #05070b;
+  overflow: hidden;
+}
+.scene-tile-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 300ms ease, filter 300ms ease;
+}
+.scene-tile:hover .scene-tile-thumb {
+  transform: scale(1.04);
+}
+
+.scene-tile-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    135deg,
+    rgba(138, 183, 255, 0.28) 0%,
+    rgba(196, 166, 255, 0.28) 50%,
+    rgba(42, 48, 66, 0.95) 100%
+  );
+  position: relative;
+}
+.scene-tile-placeholder::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at 28% 26%,
+      rgba(255, 255, 255, 0.12),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 78% 82%,
+      rgba(0, 0, 0, 0.35),
+      transparent 60%
+    );
+  pointer-events: none;
+}
+.scene-tile-placeholder-dev-only {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 149, 0, 0.22) 0%,
+    rgba(196, 166, 255, 0.18) 55%,
+    rgba(42, 48, 66, 0.95) 100%
+  );
+}
+.scene-tile-initials {
+  position: relative;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  user-select: none;
+}
+
+/* The little pulsing dot in the top-right corner of tiles that have
+ * unresolved feedback — mirrors the amber "needs attention" language
+ * used on the 3D pins and feed filter chips. */
+.scene-tile-pulse {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 11px;
+  line-height: 1;
+  color: #ffcf6a;
+  background: rgba(20, 24, 32, 0.75);
+  border: 1px solid rgba(255, 207, 106, 0.65);
+  border-radius: 50%;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 0 0 3px rgba(255, 207, 106, 0.12);
+  animation: scene-tile-pulse 1.6s ease-in-out infinite;
+}
+@keyframes scene-tile-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(255, 207, 106, 0.12); }
+  50%      { box-shadow: 0 0 0 6px rgba(255, 207, 106, 0.04); }
+}
+
+.scene-tile-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 22px 12px 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.55) 65%,
+    rgba(0, 0, 0, 0.78) 100%
+  );
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+}
+.scene-tile-name-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.scene-tile-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.scene-tile-kind {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 149, 0, 0.2);
+  border: 1px solid rgba(255, 149, 0, 0.55);
+  color: #f0b666;
+}
+.scene-tile-folder {
+  font-size: 10.5px;
+  color: rgba(235, 240, 250, 0.72);
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.scene-tile-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px 10px;
+  border-top: 1px solid #1a1f2a;
+  background: #0f131b;
+}
+.scene-tile-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.scene-tile-chip-open {
+  color: #ffd487;
+  background: rgba(255, 207, 106, 0.14);
+  border-color: rgba(255, 207, 106, 0.45);
+}
+.scene-tile-chip-resolved {
+  color: #9ee8bf;
+  background: rgba(120, 230, 160, 0.14);
+  border-color: rgba(120, 230, 160, 0.4);
+}
+.scene-tile-chip-empty {
+  color: #6c7689;
+  background: #131823;
+  border-color: #1f2635;
+}
+.scene-tile-time {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: #6c7689;
+  font-variant-numeric: tabular-nums;
+}
+
+.scenes-empty-filter {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #7e8aa0;
+  background: #11151d;
+  border: 1px dashed #1f2635;
+  border-radius: 10px;
 }
 

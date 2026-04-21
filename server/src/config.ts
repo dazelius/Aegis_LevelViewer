@@ -28,13 +28,24 @@ function envOptional(key: string, fallback: string): string {
  * it once here early so the config object can reference it.
  */
 const _bundleDir = path.resolve(REPO_ROOT, envOptional('AEGISGRAM_BUNDLE_DIR', './data/bundle'));
-const _bundleModeAtLoad = (() => {
-  try {
-    return fs.statSync(path.join(_bundleDir, 'manifest.json')).isFile();
-  } catch {
-    return false;
-  }
-})();
+
+// AEGISGRAM_FORCE_LIVE=true forces live mode even when a bundle exists on
+// disk. Useful for local development: you can have a baked bundle available
+// for reference yet still get the real-time Unity repo experience without
+// deleting data/bundle/. The env var is intentionally ignored in production
+// (set it only in your local .env — not in the platform's env config).
+const _forceLive =
+  envOptional('AEGISGRAM_FORCE_LIVE', 'false').toLowerCase() === 'true';
+
+const _bundleModeAtLoad = _forceLive
+  ? false
+  : (() => {
+      try {
+        return fs.statSync(path.join(_bundleDir, 'manifest.json')).isFile();
+      } catch {
+        return false;
+      }
+    })();
 
 /**
  * Required-in-live-mode env var reader. Missing keys throw (so live dev

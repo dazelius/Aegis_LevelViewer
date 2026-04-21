@@ -45,7 +45,8 @@ import { assetIndex } from '../unity/assetIndex.js';
 import { getFbxMeshInfo } from '../unity/metaParser.js';
 import { parseMaterialByGuid } from '../unity/materialParser.js';
 import { syncUnityRepo } from '../git/gitSync.js';
-import { bundleMode, config, getAssetsDir } from '../config.js';
+import { triggerLazyLfsForScene, ensureLfsFile, isLfsPointerBuf } from '../git/lazyLfs.js';
+import { bundleMode, config, getAssetsDir, getRepo2LocalDir } from '../config.js';
 import { bundleIndex, isBundleLfsPointer } from '../bundle/bundleIndex.js';
 import {
   bakedJsonPathFor,
@@ -190,6 +191,12 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
     return;
   }
 
+  // Kick off a background LFS fetch for every binary asset this scene
+  // references that is still a pointer on disk. Does not block the scene
+  // response — the JSON is returned immediately and Three.js starts
+  // rendering while the downloads race the browser render pipeline.
+  triggerLazyLfsForScene(absPath, getRepo2LocalDir());
+
   try {
     const parsed = await parseScene(absPath, relPath);
     // Tag the YAML pipeline's output with a stable format string so the
@@ -305,17 +312,25 @@ apiRouter.get('/assets/texture', async (req: Request, res: Response) => {
     return;
   }
   try {
-    const buf = await fs.readFile(rec.absPath);
-    // Detect unresolved Git LFS pointers. Instead of a 404 (which produces
-    // noisy console errors and, worse, can crash older TextureLoader-based
-    // client code), serve a small transparent placeholder PNG with 200 OK so
-    // the material falls back to flat-color without any fetch failure.
-    if (isLfsPointer(buf)) {
-      res.setHeader('Content-Type', 'image/png');
-      res.setHeader('X-Lfs-Placeholder', '1');
-      res.setHeader('Cache-Control', 'public, max-age=60');
-      res.end(PLACEHOLDER_PNG);
-      return;
+    let buf = await fs.readFile(rec.absPath);
+    // Detect unresolved Git LFS pointers. In live mode we attempt a lazy
+    // fetch first (waiting up to 45 s if the scene pre-fetch already queued
+    // this file, or triggering a fresh single-file download otherwise).
+    // In bundle mode (or if the per-file fetch times out / fails) we fall
+    // back to the transparent placeholder PNG so the material degrades
+    // gracefully to flat-colour without crashing the loader.
+    if (isLfsPointerBuf(buf)) {
+      if (!bundleMode) {
+        await ensureLfsFile(rec.absPath, getRepo2LocalDir());
+        buf = await fs.readFile(rec.absPath).catch(() => buf);
+      }
+      if (isLfsPointerBuf(buf)) {
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('X-Lfs-Placeholder', '1');
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        res.end(PLACEHOLDER_PNG);
+        return;
+      }
     }
     // sharp/libvips does not support TGA, so we pre-decode TGA files to raw
     // RGBA pixels via lunapaint's codec, then hand the raw buffer to sharp
@@ -446,12 +461,6 @@ apiRouter.get('/assets/texture', async (req: Request, res: Response) => {
   }
 });
 
-function isLfsPointer(buf: Buffer): boolean {
-  if (buf.length > 1024) return false;
-  const head = buf.slice(0, 64).toString('utf8');
-  return head.startsWith('version https://git-lfs.github.com/spec/');
-}
-
 // Mesh streamer. Query: ?guid=<32 hex>
 // Streams the raw FBX/OBJ/ASSET asset bytes so Three.js's FBXLoader/OBJLoader
 // can parse it client-side. We do NOT do any transcoding here.
@@ -507,17 +516,23 @@ apiRouter.get('/assets/mesh', async (req: Request, res: Response) => {
     return;
   }
   try {
-    const buf = await fs.readFile(rec.absPath);
-    if (isLfsPointer(buf)) {
-      // The FBX hasn't been pulled via Git LFS. Tell the client explicitly so
-      // it can show a placeholder box instead of trying to parse a 130-byte
-      // text file as FBX (which would throw a cryptic loader error).
-      res.status(409).json({
-        error: 'lfs-pointer',
-        hint: 'set LEVEL_VIEWER_GIT_FETCH_LFS=true and re-sync (/api/sync)',
-        relPath: rec.relPath,
-      });
-      return;
+    let buf = await fs.readFile(rec.absPath);
+    if (isLfsPointerBuf(buf)) {
+      if (!bundleMode) {
+        // Await the in-flight scene pre-fetch (or start a dedicated one).
+        await ensureLfsFile(rec.absPath, getRepo2LocalDir());
+        buf = await fs.readFile(rec.absPath).catch(() => buf);
+      }
+      if (isLfsPointerBuf(buf)) {
+        // Still a pointer after wait/timeout — tell the client explicitly
+        // so it renders a placeholder box instead of crashing the loader.
+        res.status(409).json({
+          error: 'lfs-pointer',
+          hint: 'LFS fetch in progress or upstream blob missing — retry shortly',
+          relPath: rec.relPath,
+        });
+        return;
+      }
     }
     const contentType =
       ext === '.fbx'
