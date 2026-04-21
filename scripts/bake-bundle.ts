@@ -297,6 +297,26 @@ async function bakeScene(relPath: string, absPath: string): Promise<BakedSceneRe
     // fall through to YAML parser
   }
 
+  // Fail fast with an actionable message if the `.unity` is still an
+  // LFS pointer. parseScene would otherwise silently produce an empty
+  // scene (pointer files parse as a one-line YAML header) and we'd
+  // waste a bundle slot on an unusable entry.
+  try {
+    const probe = await fs.readFile(absPath);
+    if (isLfsPointer(probe)) {
+      throw new Error(
+        `scene file is still a git-lfs pointer (${probe.length} bytes). ` +
+          `The lfs pull for this extension must have failed. ` +
+          `Check the '[gitSync] lfs pull: X ok, Y failed' summary earlier in the log.`,
+      );
+    }
+  } catch (err) {
+    // Re-throw our own diagnostic errors; swallow fs errors (file
+    // vanishing between listScenes and here is vanishingly unlikely
+    // but we'd rather let parseScene's own error handling surface it).
+    if (err instanceof Error && err.message.includes('git-lfs pointer')) throw err;
+  }
+
   const parsed = await parseScene(absPath, relPath);
   // Tag the YAML output with its format version — same header the live
   // /api/levels/* endpoint prepends.

@@ -140,6 +140,15 @@ if (!exists('server/dist/index.js')) {
 if (!exists('data/bundle/manifest.json')) {
   if (process.env.GITLAB_REPO2_URL) {
     log('no content bundle found — baking from GITLAB_REPO2_URL...');
+    // Force full-LFS mode for the child bake process. This MUST be
+    // set here on the parent env (inherited by the spawn) rather
+    // than inside bake-bundle.ts, because ESM imports hoist ahead
+    // of top-level statements — by the time the bake script's
+    // inline `process.env.LEVEL_VIEWER_GIT_FETCH_LFS = 'true'`
+    // runs, `config.ts` has already been evaluated and captured
+    // the old (false) value. Setting it here means `config.ts`
+    // sees 'true' on its first and only read.
+    process.env.LEVEL_VIEWER_GIT_FETCH_LFS = 'true';
     run('npm', ['run', 'bake', '--workspace=server']);
   } else {
     warn('no data/bundle/manifest.json and no GITLAB_REPO2_URL set.');

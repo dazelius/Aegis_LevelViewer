@@ -127,24 +127,102 @@ async function cloneSparse(targetDir: string): Promise<void> {
  * When `gitFetchLfs` is enabled we do a full `lfs pull` which also includes
  * textures and other binary blobs.
  */
-async function fetchLfsAssets(targetDir: string): Promise<void> {
+/**
+ * LFS pull, resiliently.
+ *
+ * Project Aegis's LFS server occasionally has a pointer whose blob is
+ * missing (objects deleted from the LFS storage, or never pushed). A
+ * single such object causes `git lfs pull` to emit:
+ *
+ *   Scanner error: missing object: <sha>
+ *   Errors logged to '.../.git/lfs/logs/<ts>.log'.
+ *
+ * ...and exit non-zero WITHOUT smudging any of the healthy pointers
+ * scanned alongside it. That leaves the working tree full of 130-byte
+ * pointer files and breaks every downstream step (scene YAML parses
+ * into an empty AST, texture copy sees pointer bytes, etc.).
+ *
+ * We mitigate by splitting the pull into extension-scoped batches.
+ * Each batch is independent, so a single missing blob only poisons
+ * the batch that contains it — everything else still lands on disk.
+ */
+const TEXT_ONLY_EXTS = [
+  '*.unity',
+  '*.mat',
+  '*.prefab',
+  '*.asset',
+  '*.controller',
+  '*.anim',
+  '*.physicMaterial',
+];
+const BINARY_EXTS = [
+  '*.png',
+  '*.jpg',
+  '*.jpeg',
+  '*.tga',
+  '*.psd',
+  '*.bmp',
+  '*.webp',
+  '*.gif',
+  '*.fbx',
+  '*.obj',
+];
+
+async function runLfsPullBatch(
+  lfsGit: SimpleGit,
+  include: string,
+): Promise<{ ok: boolean; error?: string }> {
   try {
-    const lfsGit = simpleGit(targetDir).env({
-      GIT_TERMINAL_PROMPT: '0',
-    } as Record<string, string>);
-    attachGitStreamLogger(lfsGit);
-    if (config.gitFetchLfs) {
-      console.log('[gitSync] lfs pull (full)...');
-      await lfsGit.raw(['lfs', 'pull']);
-      return;
-    }
-    // Text-based Unity YAML assets needed for scene parsing.
-    const include = '*.unity,*.mat,*.prefab,*.asset,*.controller,*.anim,*.physicMaterial';
-    console.log(`[gitSync] lfs pull --include="${include}"`);
     await lfsGit.raw(['lfs', 'pull', '--include', include]);
+    return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[gitSync] lfs pull failed (non-fatal): ${msg}`);
+    return { ok: false, error: msg };
+  }
+}
+
+async function fetchLfsAssets(targetDir: string): Promise<void> {
+  const lfsGit = simpleGit(targetDir).env({
+    GIT_TERMINAL_PROMPT: '0',
+  } as Record<string, string>);
+  attachGitStreamLogger(lfsGit);
+
+  // Order matters: text-only first, so even if every binary batch
+  // fails we still have scene YAML for a valid (textureless) bake.
+  const batches = config.gitFetchLfs
+    ? [...TEXT_ONLY_EXTS, ...BINARY_EXTS]
+    : TEXT_ONLY_EXTS;
+
+  console.log(
+    `[gitSync] lfs pull in ${batches.length} extension batches ` +
+      `(${config.gitFetchLfs ? 'full' : 'text-only'})...`,
+  );
+
+  let okCount = 0;
+  const failed: Array<{ ext: string; error: string }> = [];
+  for (const ext of batches) {
+    const res = await runLfsPullBatch(lfsGit, ext);
+    if (res.ok) {
+      okCount += 1;
+      console.log(`[gitSync]   ${ext} OK`);
+    } else {
+      failed.push({ ext, error: res.error ?? 'unknown' });
+      // Trim multi-line simple-git error messages to one log line
+      // so the summary isn't drowned out.
+      const oneLine = (res.error ?? '').split(/\r?\n/)[0].slice(0, 200);
+      console.warn(`[gitSync]   ${ext} FAILED — ${oneLine}`);
+    }
+  }
+
+  console.log(`[gitSync] lfs pull: ${okCount} ok, ${failed.length} failed`);
+  if (failed.length && okCount === 0) {
+    // Every batch died — that usually means a global LFS problem
+    // (auth, network, server down), not per-object corruption. Let
+    // the caller see the first error so diagnostics are meaningful.
+    const first = failed[0];
+    console.warn(
+      `[gitSync] all lfs batches failed. First error for ${first.ext}: ${first.error}`,
+    );
   }
 }
 
