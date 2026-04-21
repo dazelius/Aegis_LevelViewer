@@ -449,6 +449,14 @@ export function CharacterAvatar({ stateRef }: CharacterAvatarProps) {
     let desired: PlayerAnimKey = rawDesired;
     const crouching = playModeState.crouching;
     const firing = playModeState.firing;
+    // "aim pose active" means the upper body should hold the shouldered
+    // rifle posture — true both when the trigger is held (firing) AND
+    // when the user is just aiming down sights without shooting. The
+    // runFAim / crouchWalkFAim clips were authored for the firing
+    // case, but the pose they produce (weapon shouldered, both hands
+    // on the gun, chest facing forward) is exactly what ADS needs, so
+    // we reuse them for the aim-without-fire branch too.
+    const aimActive = firing || playModeState.aiming;
 
     if (rawDesired === 'jumpStart' || rawDesired === 'jumpLoop' || rawDesired === 'jumpEnd') {
       // airborne: leave jumping clips alone regardless of stance.
@@ -458,7 +466,7 @@ export function CharacterAvatar({ stateRef }: CharacterAvatarProps) {
           desired = actions.crouchIdle ? 'crouchIdle' : rawDesired;
           break;
         case 'runF':
-          if (firing && actions.crouchWalkFAim) desired = 'crouchWalkFAim';
+          if (aimActive && actions.crouchWalkFAim) desired = 'crouchWalkFAim';
           else if (actions.crouchWalkF) desired = 'crouchWalkF';
           break;
         case 'runB':
@@ -471,7 +479,7 @@ export function CharacterAvatar({ stateRef }: CharacterAvatarProps) {
           if (actions.crouchWalkR) desired = 'crouchWalkR';
           break;
       }
-    } else if (rawDesired === 'runF' && firing && actions.runFAim) {
+    } else if (rawDesired === 'runF' && aimActive && actions.runFAim) {
       desired = 'runFAim';
     }
     const current = currentRef.current;

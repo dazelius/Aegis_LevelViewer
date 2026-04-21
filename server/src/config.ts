@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -84,7 +85,43 @@ export const config = {
     REPO_ROOT,
     envOptional('LEVEL_VIEWER_UNITY_EXPORT_DIR', './data/unity-export'),
   ),
+
+  // === Deploy-time content bundle ===
+  //
+  // For platform deployments we pre-bake all scene JSONs + the exact subset
+  // of textures/meshes they reference into `data/bundle/`. When the bundle
+  // exists, the server runs in "bundle mode":
+  //   - Skips git sync (Project Aegis GitLab is never contacted at runtime).
+  //   - Skips the .meta scan (assetIndex.build()).
+  //   - Serves levels / textures / meshes / fbx-character-materials straight
+  //     from the bundle using a manifest-backed O(1) lookup.
+  //
+  // Presence of `<bundleDir>/manifest.json` is the single switch. Local dev
+  // continues to use the live Project Aegis clone when no bundle is present.
+  bundleDir: path.resolve(REPO_ROOT, envOptional('AEGISGRAM_BUNDLE_DIR', './data/bundle')),
+
+  // Space-separated list of origins allowed to embed Aegisgram in an iframe,
+  // e.g. "https://platform.example.com https://staging.example.com".
+  // Used to build the `Content-Security-Policy: frame-ancestors` header.
+  // Empty string = only same-origin framing (`'self'`) is allowed.
+  iframeOrigins: envOptional('AEGISGRAM_IFRAME_ORIGINS', ''),
 };
+
+/**
+ * True iff a pre-baked content bundle exists on disk. Computed once at
+ * module load — the filesystem state for bundled deployments doesn't
+ * change during a process lifetime, and we want downstream code to be
+ * able to read a plain boolean rather than calling fs.stat on every
+ * request. The bundle directory can be swapped via the
+ * `AEGISGRAM_BUNDLE_DIR` env var (default `./data/bundle`).
+ */
+export const bundleMode: boolean = (() => {
+  try {
+    return fs.statSync(path.join(config.bundleDir, 'manifest.json')).isFile();
+  } catch {
+    return false;
+  }
+})();
 
 export function getRepo2LocalDir(): string {
   // Derive a directory name from the repo URL, e.g. "projectaegis"

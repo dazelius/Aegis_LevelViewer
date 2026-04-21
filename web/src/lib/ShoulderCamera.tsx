@@ -212,6 +212,28 @@ export function ShoulderCamera({
       : preset;
   const cfg = CAMERA_PRESETS[effectivePreset];
 
+  // "Base" config: the stance-only preset (Stand_Default or
+  // Crouch_Default) stripped of any Aim / Ads / HipFire / Throw
+  // suffix. We use it to hold the RIG GEOMETRY (cameraOffsetY,
+  // shoulderOffsetX, verticalArmLength) constant across ADS
+  // transitions — only FOV, camera distance, and mouse sensitivity
+  // actually swap when `preset` changes.
+  //
+  // Why: keeping the rig geometry locked means the camera's pivot
+  // stays at the same world position before/during/after ADS, so
+  // the crosshair keeps pointing at the same target. Letting the
+  // aim preset's tighter offsets (1.06 vs 1.00 eye height, 0.38 vs
+  // 0.45 shoulder, 0.365 vs 0.50 arm) take effect was reading as
+  // "the camera swings to a different angle AND zooms in", which
+  // the user flagged as wrong: ADS should be a pure zoom from the
+  // existing view. Cinemachine shooters typically keep the pivot
+  // identical between default and ADS presets for exactly this
+  // reason; the authored Aegis aim preset's subtle offset tweaks
+  // are a stylistic choice that breaks crosshair continuity here.
+  const baseCfg: CameraPreset = crouching
+    ? CAMERA_PRESETS.Crouch_Default
+    : CAMERA_PRESETS.Stand_Default;
+
   // Smoothed effective camera distance — separate from `distanceRef`
   // (which is the USER'S desired zoom). When an obstacle is in the
   // way this gets pulled toward a smaller value; when the way
@@ -232,6 +254,17 @@ export function ShoulderCamera({
   const yawRef = useRef(initialYaw);
   const pitchRef = useRef(initialPitch);
   const distanceRef = useRef(initialDistance ?? cfg.cameraDistance);
+  // User's zoom relative to the preset. 1.0 = preset default, <1
+  // pulls in, >1 pushes out. We store the multiplier (not an
+  // absolute metre value) so a preset swap — e.g. Stand_Default
+  // (2.30 m) → Stand_Aim (1.20 m) for right-click ADS — rescales
+  // the actual distance automatically, while still preserving
+  // whatever the user has dialled in with the mouse wheel.
+  const distanceMultRef = useRef(
+    initialDistance !== undefined && cfg.cameraDistance > 0
+      ? initialDistance / cfg.cameraDistance
+      : 1,
+  );
 
   // Scene-scale zoom clamps. Aegis' Stand_Default distance is 2.3;
   // we allow the user to pull out to ~2.5x for inspection vibes
@@ -239,13 +272,34 @@ export function ShoulderCamera({
   const minD = minDistance ?? Math.max(0.6, cfg.cameraDistance * 0.4);
   const maxD = maxDistance ?? Math.max(cfg.cameraDistance * 2.5, 6);
 
+  // Smoothed preset values. When the caller swaps the `preset` prop
+  // (e.g. Stand_Default ↔ Stand_Aim for right-click ADS) we don't
+  // want the camera to pop — FOV of 80° snapping to 44.5° in one
+  // frame is nauseating. Instead we keep a live "visible" copy of
+  // each preset quantity that eases toward `cfg.*` with an
+  // exponential time constant derived from the preset's `duration`
+  // field. The transform math below reads these smoothed refs, so
+  // a single mousedown instantly re-targets without popping.
+  //
+  // The refs are seeded on mount, never re-seeded on preset swap —
+  // re-seeding would be the pop we're trying to avoid.
+  const smoothedFovRef = useRef(cfg.cameraFOV);
+  const smoothedSensMulRef = useRef(cfg.sensitivity);
+  const smoothedPresetDistRef = useRef(cfg.cameraDistance);
+  // Rig geometry seeded from `baseCfg` (stance-only), NOT `cfg`, so
+  // mounting directly into an ADS preset doesn't start from the
+  // aim preset's offsets and then visibly drift back to the base.
+  const smoothedCamOffYRef = useRef(baseCfg.cameraOffsetY);
+  const smoothedShoulderXRef = useRef(baseCfg.shoulderOffsetX);
+  const smoothedArmLenRef = useRef(baseCfg.verticalArmLength);
+
   // Resolve the live sensitivity lazily — wrap in a ref so a preset
   // swap reads the new multiplier next frame without re-running
-  // the pointermove effect.
+  // the pointermove effect. Driven from `smoothedSensMulRef` below
+  // so mouse sensitivity eases between presets along with the FOV —
+  // otherwise the look sensitivity would pop while the zoom is
+  // still interpolating, which reads as a micro-yank mid-transition.
   const sensRef = useRef(mouseSensitivityBase * cfg.sensitivity);
-  useEffect(() => {
-    sensRef.current = mouseSensitivityBase * cfg.sensitivity;
-  }, [mouseSensitivityBase, cfg.sensitivity]);
 
   // Reseed when meaningful props change.
   useEffect(() => {
@@ -256,6 +310,10 @@ export function ShoulderCamera({
       minD,
       maxD,
     );
+    distanceMultRef.current =
+      initialDistance !== undefined && cfg.cameraDistance > 0
+        ? initialDistance / cfg.cameraDistance
+        : 1;
   }, [initialYaw, initialPitch, initialDistance, cfg.cameraDistance, minD, maxD]);
 
   // Apply preset-driven camera intrinsics.
@@ -274,12 +332,17 @@ export function ShoulderCamera({
   // same left-to-right framing.
   useEffect(() => {
     if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    // Aspect-only re-application. The actual HFOV value is eased
+    // each frame inside `useFrame` (see smoothedFovRef), but a
+    // viewport resize needs an immediate refresh so the frustum
+    // stays correct until the next tick lands. We read the current
+    // smoothed HFOV so this effect doesn't fight the ease.
     const aspect = Math.max(0.01, size.width / Math.max(1, size.height));
-    const hfovRad = (cfg.cameraFOV * Math.PI) / 180;
+    const hfovRad = (smoothedFovRef.current * Math.PI) / 180;
     const vfovRad = 2 * Math.atan(Math.tan(hfovRad / 2) / aspect);
     camera.fov = (vfovRad * 180) / Math.PI;
     camera.updateProjectionMatrix();
-  }, [camera, cfg.cameraFOV, size.width, size.height]);
+  }, [camera, size.width, size.height]);
 
   // Pitch clamp derived from preset.
   const { pitchMin, pitchMax } = useMemo(
@@ -369,10 +432,21 @@ export function ShoulderCamera({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = Math.exp(e.deltaY * 0.0008);
-      distanceRef.current = THREE.MathUtils.clamp(
-        distanceRef.current * factor,
-        minD,
-        maxD,
+      // Scroll adjusts the preset-relative multiplier, not the
+      // absolute distance — so a user who zoomed in during regular
+      // traversal stays zoomed-in (proportionally) after right-
+      // clicking into ADS. We clamp the multiplier loosely by
+      // keeping the *resulting* distance in [minD, maxD]; since the
+      // preset distance floats during transitions, the actual
+      // clamp happens in the per-frame loop.
+      distanceMultRef.current *= factor;
+      // Soft cap so the multiplier can't drift absurdly far beyond
+      // the useful range — this only matters while transitioning
+      // between presets with very different cameraDistance values.
+      distanceMultRef.current = THREE.MathUtils.clamp(
+        distanceMultRef.current,
+        0.1,
+        10,
       );
     };
     dom.addEventListener('wheel', onWheel, { passive: false });
@@ -390,6 +464,68 @@ export function ShoulderCamera({
     // arm recoil kick together and settle together — otherwise one
     // component's motion lags the other and the feel is mushy.
     const dt = Math.min(dtRaw, 0.1);
+
+    // --- Preset easing (ADS / stance transitions) ----------------------
+    //
+    // Exponentially ease every preset quantity toward `cfg.*` so swapping
+    // `preset` prop (e.g. Stand_Default → Stand_Aim on right-click)
+    // reads as a smooth zoom instead of a one-frame pop. Time constant
+    // comes from the preset's own `duration` (Cinemachine's authored
+    // cross-fade length — Aim is 0.13 s, Default is 0.175 s), which
+    // happens to match the feel we want here.
+    //
+    // Geometric quantities that read each frame below (FOV, offsets,
+    // arm length) and the mouse-sensitivity multiplier are all eased
+    // together. Camera distance is intentionally NOT eased because the
+    // user controls it with the scroll wheel; replacing it on preset
+    // swap would fight the zoom input.
+    {
+      const tau = Math.max(0.03, cfg.duration);
+      const alpha = 1 - Math.exp(-dt / tau);
+      // Zoom-side channels follow the ACTIVE preset (ADS narrows FOV,
+      // pulls closer, damps sensitivity).
+      smoothedFovRef.current += (cfg.cameraFOV - smoothedFovRef.current) * alpha;
+      smoothedSensMulRef.current +=
+        (cfg.sensitivity - smoothedSensMulRef.current) * alpha;
+      smoothedPresetDistRef.current +=
+        (cfg.cameraDistance - smoothedPresetDistRef.current) * alpha;
+      // Rig geometry follows the BASE (stance-only) preset so the
+      // shoulder pivot stays put during ADS. See `baseCfg` comment
+      // above for why we intentionally ignore cfg's offsets here.
+      smoothedCamOffYRef.current +=
+        (baseCfg.cameraOffsetY - smoothedCamOffYRef.current) * alpha;
+      smoothedShoulderXRef.current +=
+        (baseCfg.shoulderOffsetX - smoothedShoulderXRef.current) * alpha;
+      smoothedArmLenRef.current +=
+        (baseCfg.verticalArmLength - smoothedArmLenRef.current) * alpha;
+      // Resolve the actual desired distance from the eased preset
+      // distance + the user's zoom multiplier. Clamp happens here
+      // so the wheel handler can stay oblivious to min/maxD (which
+      // are both preset-scale metres).
+      distanceRef.current = THREE.MathUtils.clamp(
+        smoothedPresetDistRef.current * distanceMultRef.current,
+        minD,
+        maxD,
+      );
+      // Push the smoothed sensitivity into the pointermove-consumed
+      // ref. This is cheap (one multiply) and keeps the pointer
+      // handler ignorant of the easing machinery.
+      sensRef.current = mouseSensitivityBase * smoothedSensMulRef.current;
+      // Apply the eased FOV to the live camera. Same HFOV → VFOV
+      // math as the resize-triggered effect above, run each frame
+      // while the FOV is in flight.
+      if (camera instanceof THREE.PerspectiveCamera) {
+        const aspect = Math.max(0.01, size.width / Math.max(1, size.height));
+        const hfovRad = (smoothedFovRef.current * Math.PI) / 180;
+        const vfovRad = 2 * Math.atan(Math.tan(hfovRad / 2) / aspect);
+        const nextFovDeg = (vfovRad * 180) / Math.PI;
+        if (Math.abs(camera.fov - nextFovDeg) > 1e-3) {
+          camera.fov = nextFovDeg;
+          camera.updateProjectionMatrix();
+        }
+      }
+    }
+
     const decay = Math.exp(-dt / 0.045);
     shakePitchRef.current *= decay;
     shakeYawRef.current *= decay;
@@ -422,12 +558,14 @@ export function ShoulderCamera({
     _eulerYaw.set(0, yawPure, 0, 'YXZ');
 
     // Step 1: anchor (Aegis `cameraOffset`, y-only in every preset).
+    //   Reads the eased `smoothedCamOffY` — during an ADS transition
+    //   this crawls from 1.00 up to 1.06 rather than popping.
     _anchor
       .copy(g.position)
-      .addScaledVector(_worldUp, cfg.cameraOffsetY);
+      .addScaledVector(_worldUp, smoothedCamOffYRef.current);
 
     // Step 2: shoulder (yaw-only rotated `shoulderOffset.x`).
-    _tmp.set(cfg.shoulderOffsetX, 0, 0).applyEuler(_eulerYaw);
+    _tmp.set(smoothedShoulderXRef.current, 0, 0).applyEuler(_eulerYaw);
     _shoulder.copy(_anchor).add(_tmp);
 
     // Step 3: pivot = shoulder + worldUp × verticalArmLength. World
@@ -435,7 +573,7 @@ export function ShoulderCamera({
     // height when the player turns.
     _pivot
       .copy(_shoulder)
-      .addScaledVector(_worldUp, cfg.verticalArmLength);
+      .addScaledVector(_worldUp, smoothedArmLenRef.current);
 
     // Step 4: camera sits `d` metres behind pivot along −forward.
     // `d` comes from the zoom ref, NOT the preset constant, so a
@@ -468,24 +606,68 @@ export function ShoulderCamera({
     let effectiveD = d;
     if (avoidObstacles) {
       const ideal = d;
-      // Ray from pivot toward the IDEAL camera spot. We probe a hair
-      // further than the ideal so the skin still pulls us in when
-      // the wall sits exactly at the ideal point.
+      // Thick-ray probe — a 5-point approximation of Cinemachine's
+      // sphere cast. A single ray down the centre of the back-off
+      // direction is what we HAD, but it's infinitely thin: any
+      // wall that the camera *body* overlaps while the centre line
+      // threads through empty space gets missed, and the camera
+      // phases straight through. In practice that meant thin pillars,
+      // wall corners at glancing angles, and window frames all
+      // failed to push the camera in.
+      //
+      // Instead we cast FIVE parallel rays from pivot → camera:
+      //   - centre of the disk (original ray)
+      //   - four cardinal offsets (±right, ±up in the camera's
+      //     orientation basis) at `cameraCollisionRadius` distance
+      // and take the minimum hit distance among them. That's the
+      // same worst-case a true sphere cast would produce against
+      // wall-like (planar) geometry — and the cost is five cheap
+      // ray-intersectObject calls per frame, which is comfortably
+      // negligible compared to the shooter raycast or the ground
+      // probe in PlayerController.
+      //
+      // We DO skip the four corner rays when `cameraCollisionRadius`
+      // is essentially zero (degenerate / first-person preset) so
+      // the old behaviour is recovered as a limit case.
       _collisionDir.copy(_forward).multiplyScalar(-1);
-      collisionRaycaster.set(_pivot, _collisionDir);
-      collisionRaycaster.near = 0;
-      collisionRaycaster.far = ideal + cameraCollisionRadius;
-      _collisionHits.length = 0;
-      collisionRaycaster.intersectObject(scene, true, _collisionHits);
-      const hit = firstNonSelfHit(_collisionHits, g);
-      _collisionHits.length = 0;
+
+      // Camera-space right/up basis for the offset disk. Built from
+      // the same Euler we just loaded into the camera's quaternion
+      // — so the thick-ray cross section is always perpendicular
+      // to the back-off direction regardless of pitch.
+      _probeRight.set(1, 0, 0).applyEuler(_euler);
+      _probeUp.set(0, 1, 0).applyEuler(_euler);
+
+      const radius = Math.max(0, cameraCollisionRadius);
+      const probeCount = radius > 1e-4 ? 5 : 1;
+      const far = ideal + radius;
+      let minHitDist: number | null = null;
+
+      for (let p = 0; p < probeCount; p++) {
+        // p=0 is the centre ray; p=1..4 are ±right / ±up offsets.
+        _probeOrigin.copy(_pivot);
+        if (p === 1) _probeOrigin.addScaledVector(_probeRight, radius);
+        else if (p === 2) _probeOrigin.addScaledVector(_probeRight, -radius);
+        else if (p === 3) _probeOrigin.addScaledVector(_probeUp, radius);
+        else if (p === 4) _probeOrigin.addScaledVector(_probeUp, -radius);
+
+        collisionRaycaster.set(_probeOrigin, _collisionDir);
+        collisionRaycaster.near = 0;
+        collisionRaycaster.far = far;
+        _collisionHits.length = 0;
+        collisionRaycaster.intersectObject(scene, true, _collisionHits);
+        const hit = firstNonSelfHit(_collisionHits, g);
+        _collisionHits.length = 0;
+        if (hit && (minHitDist === null || hit.distance < minHitDist)) {
+          minHitDist = hit.distance;
+        }
+      }
 
       // Safe distance: pulled inside the wall by the skin, floored
       // at the preset-permitted minimum so 1st-person mode
       // (cameraDistance=0 presets) still works.
-      const safe = hit
-        ? Math.max(0, hit.distance - cameraCollisionRadius)
-        : ideal;
+      const safe =
+        minHitDist !== null ? Math.max(0, minHitDist - radius) : ideal;
 
       // Seed the smoother on the very first frame so we don't pop
       // out from 0 to `safe` on mount.
@@ -592,3 +774,10 @@ const _pivot = new THREE.Vector3();
 const _worldUp = new THREE.Vector3(0, 1, 0);
 const _collisionDir = new THREE.Vector3();
 const _collisionHits: THREE.Intersection[] = [];
+// Scratch vectors for the 5-point thick-ray camera collision probe.
+// Kept at module scope so the hot path doesn't allocate a new
+// Vector3 per-frame × per-probe (which would be 5 fresh allocs per
+// frame at 60 Hz, just for camera collision).
+const _probeOrigin = new THREE.Vector3();
+const _probeRight = new THREE.Vector3();
+const _probeUp = new THREE.Vector3();

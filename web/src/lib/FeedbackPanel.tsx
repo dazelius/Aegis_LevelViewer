@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 
+import { FeedbackReactions } from './FeedbackReactions';
 import {
   listFeedbacks,
+  pollFeedbacks,
   removeFeedback,
   subscribeFeedbacks,
   type Feedback,
@@ -22,12 +24,20 @@ import {
 export function FeedbackPanel({ scenePath }: { scenePath: string }) {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => listFeedbacks(scenePath));
   const [collapsed, setCollapsed] = useState(false);
+  const openCount = feedbacks.filter((fb) => fb.status !== 'resolved').length;
 
   useEffect(() => {
     setFeedbacks(listFeedbacks(scenePath));
-    return subscribeFeedbacks(() => {
+    const unsub = subscribeFeedbacks(() => {
       setFeedbacks(listFeedbacks(scenePath));
     });
+    // Panel is only mounted in edit mode, but we still want to see
+    // other users' posts as they come in — poll while mounted.
+    const stopPoll = pollFeedbacks(scenePath, 15000);
+    return () => {
+      unsub();
+      stopPoll();
+    };
   }, [scenePath]);
 
   if (feedbacks.length === 0 && collapsed) return null;
@@ -37,6 +47,19 @@ export function FeedbackPanel({ scenePath }: { scenePath: string }) {
       <div className="feedback-panel-head">
         <div className="feedback-panel-title">
           피드백 <span className="feedback-panel-count">{feedbacks.length}</span>
+          {/*
+            Secondary "needs review" count helps reviewers scan at a
+            glance — the primary count is "how much chatter" while
+            this one answers "how much do I still have to look at".
+            Hidden when everything is resolved or nothing exists, so
+            the header doesn't get noisy on empty / fully-cleared
+            scenes.
+          */}
+          {feedbacks.length > 0 && openCount !== feedbacks.length && (
+            <span className="feedback-panel-open-count" title="아직 확인되지 않은 피드백">
+              · 확인 대기 {openCount}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -75,8 +98,9 @@ function FeedbackCard({
   feedback: Feedback;
   onDelete: () => void;
 }) {
+  const resolved = feedback.status === 'resolved';
   return (
-    <div className="feedback-card">
+    <div className={`feedback-card${resolved ? ' is-resolved' : ''}`}>
       <img
         className="feedback-card-thumb"
         src={feedback.thumbnail}
@@ -84,6 +108,12 @@ function FeedbackCard({
       />
       <div className="feedback-card-body">
         <div className="feedback-card-meta">
+          {/*
+            Status pill first so it reads as the primary state —
+            "확인됨 / 확인중" is the single most important signal on
+            a resolved card. Time + delete fall after it.
+          */}
+          <FeedbackStatusBadge status={feedback.status} />
           <span className="feedback-card-time" title={new Date(feedback.createdAt).toLocaleString('ko-KR')}>
             {formatRelativeKo(feedback.createdAt)}
           </span>
@@ -100,8 +130,22 @@ function FeedbackCard({
         <div className="feedback-card-anchor" title="월드 좌표 (three.js RH, Y-up)">
           @ ({feedback.anchor.map((v) => v.toFixed(1)).join(', ')})
         </div>
+        <FeedbackReactions feedback={feedback} variant="panel" />
       </div>
     </div>
+  );
+}
+
+function FeedbackStatusBadge({ status }: { status: Feedback['status'] }) {
+  const resolved = status === 'resolved';
+  return (
+    <span
+      className={`feedback-status-badge${resolved ? ' is-resolved' : ' is-open'}`}
+      title={resolved ? '확인됨' : '확인 대기 중'}
+    >
+      <span aria-hidden="true">{resolved ? '✓' : '●'}</span>
+      {resolved ? '확인됨' : '확인중'}
+    </span>
   );
 }
 

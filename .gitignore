@@ -12,6 +12,16 @@ data/*.db
 # Baked export artifacts (regenerated from source scenes)
 data/unity-export/
 
+# Runtime-generated app state. The server writes feedback posts here
+# (`<repoRoot>/data/feedbacks.json`) — it should start empty on each
+# fresh deploy and accumulate per-environment, never round-trip through
+# version control.
+data/feedbacks.json
+
+# NOTE: `data/bundle/` is intentionally NOT ignored — it's the deploy-time
+# content pack the server reads in bundle mode. Large binaries inside it
+# are tracked via Git LFS (see .gitattributes).
+
 # Ad-hoc debug captures
 debug-*.png
 _logs/

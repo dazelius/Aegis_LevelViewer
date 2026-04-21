@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import App from './App';
 import LevelList from './pages/LevelList';
 import LevelViewer from './pages/LevelViewer';
+import FeedView from './pages/FeedView';
 import './styles.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
@@ -13,6 +14,7 @@ root.render(
       <Routes>
         <Route path="/" element={<App />}>
           <Route index element={<LevelList />} />
+          <Route path="feed" element={<FeedView />} />
           <Route path="level/*" element={<LevelViewer />} />
         </Route>
       </Routes>

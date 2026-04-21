@@ -37,6 +37,40 @@ a:hover { text-decoration: underline; }
   font-weight: 600;
   letter-spacing: 0.3px;
 }
+/* Brand mark: logo image + wordmark. Clickable (routes to /), so it
+   doubles as the "go home" affordance. Colour + hover are explicit
+   here so we override the global `a { color: #6aa9ff }` — the brand
+   name reads as neutral white chrome, not a link-blue. */
+.app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  line-height: 1;
+}
+.app-brand:hover { text-decoration: none; }
+.app-brand-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* Share the Feed page's white-key filter so the header logo drops
+   * its baked-in white background too — keeps the small header
+   * wordmark consistent with the big one on the Feed page. */
+  filter: url(#aegisgram-white-to-alpha);
+}
+.app-brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  background: linear-gradient(90deg, #8ab7ff 0%, #c4a6ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
 .app-header .spacer { flex: 1; }
 .app-header button {
   background: #1c2230;
@@ -541,9 +575,43 @@ body.play-mode .app-header { display: none; }
   box-shadow: 0 12px 24px -14px rgba(0, 0, 0, 0.55);
   z-index: 15;
   overflow: hidden;
+  /* Geometry needs to move smoothly when the inspector opens /
+   * closes next to us so the user sees the panel slide aside
+   * rather than teleport. `right` and `top` are the two axes we
+   * reposition below — transitioning them covers both the
+   * inspector-open case and the responsive wrap. */
+  transition: right 160ms ease, top 160ms ease, left 160ms ease;
 }
 .feedback-panel.collapsed {
   width: auto;
+}
+
+/* Inspector + feedback panel both want the top-right slot. When the
+ * inspector is actually mounted (edit-mode with a selection), push
+ * the feedback panel LEFT of it so they sit side-by-side instead of
+ * stacking on top of each other. Uses `:has()` so the layout rule
+ * lives entirely in CSS — no React prop plumbing — and applies
+ * automatically whenever the inspector mounts/unmounts.
+ *
+ * Offset math: inspector is 340 px wide with a 12 px right margin;
+ * we add a 10 px visual gap so the two panels don't kiss. */
+.viewer-root:has(.inspector-panel) .feedback-panel {
+  right: calc(340px + 12px + 10px);
+}
+
+/* Narrow viewports (split editors, half-screen windows): side-by-
+ * side doesn't fit, so drop the feedback panel to the BOTTOM-LEFT
+ * above the chat HUD instead. Keeps it reachable without fighting
+ * the inspector for pixels. 1100 px threshold = inspector (340) +
+ * feedback (300) + margins (~80) + some breathing room. */
+@media (max-width: 1100px) {
+  .viewer-root:has(.inspector-panel) .feedback-panel {
+    right: auto;
+    left: 14px;
+    top: auto;
+    bottom: 220px; /* sits above the chat HUD which anchors bottom-left */
+    max-height: calc(100% - 260px);
+  }
 }
 .feedback-panel-head {
   display: flex;
@@ -655,5 +723,1066 @@ body.play-mode .app-header { display: none; }
   font-size: 10px;
   color: #556075;
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+/* --------------------------------------------------------------------
+ * Header navigation (Scenes / Feed tabs)
+ * ------------------------------------------------------------------ */
+.app-nav {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px;
+  background: #0d1118;
+  border: 1px solid #232833;
+  border-radius: 6px;
+}
+.app-nav-link {
+  display: inline-block;
+  padding: 5px 12px;
+  color: #9aa5b8;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 4px;
+  text-decoration: none;
+  letter-spacing: 0.2px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.app-nav-link:hover {
+  color: #e8ecf1;
+  text-decoration: none;
+  background: #1a2030;
+}
+.app-nav-link.active {
+  color: #ffffff;
+  background: linear-gradient(90deg, rgba(138,183,255,0.18), rgba(196,166,255,0.18));
+  box-shadow: inset 0 0 0 1px rgba(138,183,255,0.35);
+}
+
+/* --------------------------------------------------------------------
+ * Global social feed page (/feed)
+ *
+ * Single-column, newest-first timeline — the "Aegisgram timeline"
+ * that shows posts across every scene. Max-width is set so lines of
+ * text don't stretch unreadably wide on ultrawide monitors while
+ * still giving the thumbnails enough horizontal room to feel like
+ * the star of each card.
+ * ------------------------------------------------------------------ */
+.feed-view {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+.feed-view-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1e2330;
+}
+.feed-view-logo {
+  /* Tall enough to read as a branded heading but not so tall that
+   * the feed's first card gets pushed below the fold on laptops.
+   * Width is auto so the logo's aspect ratio is preserved. */
+  height: 48px;
+  width: auto;
+  max-width: min(360px, 60vw);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* Peel the baked-in white background away. The filter is defined
+   * once at the app root; any page using the logo can reference it
+   * by id without re-declaring the matrix. */
+  filter: url(#aegisgram-white-to-alpha);
+  /* Small drop shadow once the white is gone so the logo separates
+   * from the dark page instead of looking pasted on. */
+  -webkit-filter: url(#aegisgram-white-to-alpha)
+    drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+          filter: url(#aegisgram-white-to-alpha)
+    drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+}
+.feed-view-meta {
+  /* Meta text kept baseline-aligned with the logo visually. Using
+   * align-self keeps it vertical-centered next to the 48 px logo
+   * now that the row aligns to center (was baseline when it was a
+   * text heading). */
+  align-self: center;
+  white-space: nowrap;
+}
+
+.feed-day {
+  margin-bottom: 22px;
+}
+.feed-day-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 2px 10px;
+  padding-left: 2px;
+}
+.feed-day-label {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: #8ab7ff;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.feed-day-count { font-size: 11px; }
+.feed-day-items {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.feed-card {
+  display: flex;
+  flex-direction: column;
+  background: #12161f;
+  border: 1px solid #232a38;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+.feed-card:hover {
+  border-color: #2f384a;
+}
+
+.feed-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1b202b;
+}
+.feed-card-scene {
+  min-width: 0;
+  flex: 1;
+}
+.feed-card-scene-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+.feed-card-scene-link:hover { text-decoration: none; }
+.feed-card-scene-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e8ecf1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feed-card-scene-link:hover .feed-card-scene-name {
+  color: #8ab7ff;
+}
+.feed-card-scene-folder {
+  font-size: 11px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+.feed-card-time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: #7e8aa0;
+  cursor: default;
+}
+
+.feed-card-thumb-link {
+  display: block;
+  background: #05070b;
+  line-height: 0;
+}
+.feed-card-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 460px;
+  object-fit: contain;
+  background: #05070b;
+}
+
+.feed-card-body {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.feed-card-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #e0e6ef;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.feed-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #1e2330;
+}
+.feed-card-anchor {
+  font-size: 11px;
+  color: #556075;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+.feed-card-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+.feed-card-actions .hud-toggle {
+  padding: 4px 10px;
+  font-size: 12px;
+  text-decoration: none;
+}
+.feed-card-delete {
+  background: transparent;
+  border: 1px solid #2a3142;
+  color: #a2adc0;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.feed-card-delete:hover {
+  border-color: #563040;
+  color: #ff8585;
+}
+
+.feed-empty {
+  max-width: 480px;
+  margin: 80px auto;
+  padding: 28px;
+  background: #12161f;
+  border: 1px solid #232a38;
+  border-radius: 10px;
+  text-align: center;
+}
+.feed-empty h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  background: linear-gradient(90deg, #8ab7ff 0%, #c4a6ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.feed-empty p {
+  margin: 0 0 18px;
+  color: #9aa5b8;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.feed-empty-cta {
+  display: inline-block;
+  padding: 8px 16px;
+  background: linear-gradient(90deg, rgba(138,183,255,0.2), rgba(196,166,255,0.2));
+  border: 1px solid rgba(138,183,255,0.4);
+  border-radius: 6px;
+  color: #e8ecf1;
+  text-decoration: none;
+  font-weight: 500;
+}
+.feed-empty-cta:hover {
+  text-decoration: none;
+  background: linear-gradient(90deg, rgba(138,183,255,0.3), rgba(196,166,255,0.3));
+}
+
+/* ===================================================================
+ * Nickname badge (header)
+ * =================================================================*/
+.nickname-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(138, 183, 255, 0.08);
+  border: 1px solid rgba(138, 183, 255, 0.22);
+  color: #d4dae5;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 120ms, border-color 120ms;
+}
+.nickname-badge:hover {
+  background: rgba(138, 183, 255, 0.16);
+  border-color: rgba(138, 183, 255, 0.4);
+}
+.nickname-badge.editing {
+  background: rgba(138, 183, 255, 0.16);
+  border-color: rgba(138, 183, 255, 0.55);
+  padding: 3px 8px;
+}
+.nickname-badge-at {
+  color: #8ab7ff;
+  font-weight: 600;
+  margin-right: 2px;
+}
+.nickname-badge-name {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nickname-badge-input {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #e8ecf1;
+  font: inherit;
+  min-width: 80px;
+  max-width: 200px;
+}
+
+/* ===================================================================
+ * Multiplayer chat HUD — bottom-left overlay, collapsed by default.
+ * Positioned `absolute` inside .viewer-root so it never participates
+ * in document flow; its width comes from its own content cap.
+ * =================================================================*/
+.chat-hud {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(11, 13, 17, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(138, 183, 255, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #cfd6e4;
+  pointer-events: auto;
+  z-index: 40;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
+.chat-hud.expanded {
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  max-height: 60vh;
+  user-select: text;
+}
+.chat-hud-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.chat-hud-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #e8ecf1;
+}
+.chat-hud-presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.8);
+  animation: chat-hud-presence-pulse 2s ease-in-out infinite;
+}
+@keyframes chat-hud-presence-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.chat-hud-hint {
+  font-size: 11px;
+}
+.chat-hud-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding-right: 2px;
+  /* When collapsed the tail is capped so the HUD stays small; when
+     expanded we let it grow up to the container's max-height. */
+  max-height: 64px;
+}
+.chat-hud.expanded .chat-hud-log {
+  max-height: calc(60vh - 90px);
+  min-height: 120px;
+}
+.chat-hud-empty {
+  font-size: 12px;
+  padding: 12px 4px;
+  text-align: center;
+}
+.chat-hud-line {
+  line-height: 1.35;
+  word-break: break-word;
+}
+.chat-hud-line.self .chat-hud-who {
+  color: #8ab7ff;
+}
+.chat-hud-line.system .chat-hud-text {
+  color: #7e8599;
+  font-style: italic;
+}
+.chat-hud-who {
+  font-weight: 600;
+  color: #c4a6ff;
+  margin-right: 6px;
+}
+.chat-hud-text {
+  color: #e8ecf1;
+}
+.chat-hud-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(138, 183, 255, 0.1);
+}
+.chat-hud-me {
+  font-weight: 600;
+  color: #8ab7ff;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.chat-hud-input {
+  flex: 1 1 auto;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(138, 183, 255, 0.25);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: #e8ecf1;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.chat-hud-input:focus {
+  border-color: rgba(138, 183, 255, 0.6);
+  background: rgba(255, 255, 255, 0.08);
+}
+.chat-hud-send {
+  background: linear-gradient(90deg, #3f74d9, #6a53d6);
+  border: 0;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chat-hud-send:hover {
+  filter: brightness(1.1);
+}
+.chat-hud-open {
+  align-self: flex-end;
+  background: transparent;
+  border: 1px solid rgba(138, 183, 255, 0.35);
+  color: #cfd6e4;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.chat-hud-open:hover {
+  background: rgba(138, 183, 255, 0.12);
+  border-color: rgba(138, 183, 255, 0.6);
+}
+
+/* ===================================================================
+ * Feedback hover tooltip — Play-mode reticle-follows card
+ *
+ * Floats just below the screen centre so the crosshair stays
+ * unobstructed while the preview card occupies the bottom half of
+ * the viewport. Opacity transition + translateY on visibility lets
+ * the card ease in/out instead of hard-popping when the crosshair
+ * crosses a pin boundary; the `is-visible` modifier is toggled by
+ * FeedbackTooltip based on the current hover id.
+ * =================================================================*/
+.feedback-tooltip {
+  position: absolute;
+  top: 56%;
+  left: 50%;
+  transform: translate(-50%, 0) translateY(6px);
+  width: min(440px, 72vw);
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(11, 13, 17, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 207, 106, 0.55);
+  border-radius: 10px;
+  color: #e8ecf1;
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 45;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5),
+              0 0 0 1px rgba(255, 207, 106, 0.08) inset;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.feedback-tooltip.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0) translateY(0);
+}
+.feedback-tooltip-thumb {
+  flex: 0 0 120px;
+  width: 120px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #2a3344;
+  background: #0b0d11;
+}
+.feedback-tooltip-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.feedback-tooltip-time {
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: #ffcf6a;
+  font-weight: 600;
+}
+.feedback-tooltip-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #e0e6ef;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 5.8em;
+  overflow: hidden;
+}
+.feedback-tooltip-reactions {
+  display: flex;
+  gap: 12px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #a6b0c3;
+}
+.feedback-tooltip-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* --------------------------------------------------------------------
+ * Reactions (likes + comments) — shared between panel and feed card
+ * ------------------------------------------------------------------ */
+.feedback-reactions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+.feedback-reactions-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.feedback-like,
+.feedback-comment-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #0d1118;
+  border: 1px solid #232833;
+  border-radius: 999px;
+  color: #c2cbdc;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 80ms ease;
+}
+.feedback-like:hover,
+.feedback-comment-toggle:hover {
+  background: #161c26;
+  border-color: #2f3949;
+  color: #ecf0f7;
+}
+.feedback-like:active,
+.feedback-comment-toggle:active {
+  transform: scale(0.96);
+}
+.feedback-like-icon {
+  font-size: 13px;
+  line-height: 1;
+  color: #5f6a7c;
+  transition: color 120ms ease, transform 120ms ease;
+}
+.feedback-like.is-liked {
+  background: rgba(255, 92, 108, 0.12);
+  border-color: rgba(255, 92, 108, 0.55);
+  color: #ffb4bd;
+}
+.feedback-like.is-liked .feedback-like-icon {
+  color: #ff5c6c;
+  transform: scale(1.1);
+}
+.feedback-like-count,
+.feedback-comment-count {
+  min-width: 10px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.feedback-comment-toggle.is-open {
+  background: rgba(255, 207, 106, 0.1);
+  border-color: rgba(255, 207, 106, 0.45);
+  color: #ffe3a3;
+}
+.feedback-comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #0a0d13;
+  border: 1px solid #1d232f;
+  border-radius: 8px;
+}
+.feedback-comment-empty {
+  font-size: 11px;
+  color: #596273;
+  font-style: italic;
+  padding: 2px 0;
+}
+.feedback-comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.feedback-comment-row {
+  background: #11151d;
+  border: 1px solid #1f2635;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.feedback-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #7b8396;
+  margin-bottom: 2px;
+}
+.feedback-comment-author {
+  font-weight: 600;
+  color: #cfd7e6;
+}
+.feedback-comment-time {
+  color: #596273;
+}
+.feedback-comment-delete {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #646c7d;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.feedback-comment-delete:hover { color: #ff8585; }
+.feedback-comment-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #dde3ef;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.feedback-comment-form {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.feedback-comment-input {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e6ecf7;
+  background: #0c1019;
+  border: 1px solid #222a38;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.feedback-comment-input:focus {
+  outline: none;
+  border-color: #ffcf6a;
+  box-shadow: 0 0 0 2px rgba(255, 207, 106, 0.15);
+}
+.feedback-comment-submit {
+  align-self: stretch;
+  padding: 0 12px;
+  background: linear-gradient(180deg, #ffcf6a 0%, #f7a64a 100%);
+  color: #1b1306;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+.feedback-comment-submit:hover:not(:disabled) { filter: brightness(1.08); }
+.feedback-comment-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Feed page: looser rhythm since the card is wider and the reader
+ * is actively reading rather than glancing. */
+.feedback-reactions-feed {
+  margin-top: 10px;
+}
+.feedback-reactions-feed .feedback-comment-thread {
+  padding: 10px 12px;
+}
+.feedback-reactions-feed .feedback-comment-list {
+  max-height: 320px;
+}
+
+/* --------------------------------------------------------------------
+ * "Show every feedback at once" speech-bubble overlay (hold V)
+ * ------------------------------------------------------------------ */
+.feedback-bubbles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 44;
+  overflow: hidden;
+}
+.feedback-bubble {
+  position: absolute;
+  /* left/top set imperatively from the projection. transform pins
+   * the bubble so its pointer tail lands exactly on the pin: 50%
+   * horizontal centering + 100% upward = body grows straight up
+   * from the anchor point. */
+  transform: translate(-50%, -100%);
+  max-width: min(280px, 36vw);
+  min-width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  animation: feedback-bubble-pop 160ms ease-out both;
+  will-change: left, top, opacity;
+}
+@keyframes feedback-bubble-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -100%) translateY(6px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -100%) translateY(0) scale(1);
+  }
+}
+.feedback-bubble-body {
+  background: rgba(15, 18, 24, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 207, 106, 0.6);
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #eef2f9;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 207, 106, 0.1) inset;
+}
+.feedback-bubble-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 5.6em;
+  overflow: hidden;
+  /* Fade the bottom of long text so readers know there's more in
+   * the full feed entry without the bubble ballooning. */
+  mask-image: linear-gradient(180deg, #000 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 80%, transparent 100%);
+}
+.feedback-bubble-text .muted {
+  color: #7a8294;
+  font-style: italic;
+}
+.feedback-bubble-meta {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  color: #a9b2c3;
+  letter-spacing: 0.3px;
+}
+.feedback-bubble-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.feedback-bubble-tail {
+  /* Classic speech-bubble tail — a small diamond clipped to a
+   * triangle, coloured to match the body so it reads as a single
+   * shape. Border-only trick wouldn't pick up the backdrop-filter
+   * blur, so we use a real filled div with the same border colour. */
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  background: rgba(15, 18, 24, 0.92);
+  border-right: 1px solid rgba(255, 207, 106, 0.6);
+  border-bottom: 1px solid rgba(255, 207, 106, 0.6);
+  transform: rotate(45deg);
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* --------------------------------------------------------------------
+ * Review-status styling (피드백 / 피드백 확인 lifecycle)
+ * --------------------------------------------------------------------
+ * One visual language shared across every surface that shows a
+ * feedback — the side panel, the global feed card, the crosshair
+ * tooltip, and the V-key speech bubbles. The two primitives are:
+ *
+ *   .feedback-status-badge   — small pill used to LABEL an item.
+ *   .feedback-status-toggle  — button used to CHANGE the status
+ *                              (lives in FeedbackReactions).
+ *
+ * Palette mirrors the 3D pin: amber for "open / needs attention",
+ * mint green for "resolved / reviewed". Resolved cards also get
+ * toned-down surrounding styles so the reviewer's eye is drawn to
+ * the unresolved items when scanning a list.
+ * ---------------------------------------------------------------- */
+
+.feedback-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  user-select: none;
+}
+.feedback-status-badge.is-open {
+  color: #ffd487;
+  background: rgba(255, 207, 106, 0.14);
+  border-color: rgba(255, 207, 106, 0.45);
+}
+.feedback-status-badge.is-resolved {
+  color: #9ee8bf;
+  background: rgba(120, 230, 160, 0.14);
+  border-color: rgba(120, 230, 160, 0.45);
+}
+
+.feedback-status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #0d1118;
+  border: 1px solid #232833;
+  border-radius: 999px;
+  color: #c2cbdc;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease,
+    transform 80ms ease;
+  /* Push the toggle to the right edge of the reactions bar so the
+   * "primary" reactions (like + comments) stay left-anchored and
+   * status sits apart as a separate lifecycle action. */
+  margin-left: auto;
+}
+.feedback-status-toggle:hover {
+  background: #161c26;
+  border-color: #2f3949;
+  color: #ecf0f7;
+}
+.feedback-status-toggle:active {
+  transform: scale(0.96);
+}
+.feedback-status-toggle.is-resolved {
+  background: rgba(120, 230, 160, 0.12);
+  border-color: rgba(120, 230, 160, 0.55);
+  color: #a8f0c9;
+}
+.feedback-status-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+.feedback-status-toggle.is-resolved .feedback-status-icon {
+  color: #5cd997;
+}
+.feedback-status-label {
+  font-variant-numeric: tabular-nums;
+}
+
+.feedback-status-note {
+  font-size: 10px;
+  color: #7c8aa0;
+  padding: 0 2px;
+  line-height: 1.4;
+}
+
+.feedback-panel-open-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: #8a93a5;
+  margin-left: 4px;
+}
+
+/* Dim the whole card when its feedback is resolved so open items
+ * pop visually. We keep hover/focus at full strength — if the
+ * reviewer wants to interact with a resolved card, the dimming
+ * shouldn't fight them. */
+.feedback-card.is-resolved,
+.feed-card.is-resolved {
+  opacity: 0.72;
+  transition: opacity 160ms ease;
+}
+.feedback-card.is-resolved:hover,
+.feedback-card.is-resolved:focus-within,
+.feed-card.is-resolved:hover,
+.feed-card.is-resolved:focus-within {
+  opacity: 1;
+}
+.feed-card.is-resolved {
+  border-color: rgba(120, 230, 160, 0.25);
+}
+.feedback-card.is-resolved .feedback-card-thumb,
+.feed-card.is-resolved .feed-card-thumb {
+  filter: saturate(0.65) brightness(0.9);
+}
+
+/* Feed page: filter chips row. Default landing is "확인중" so the
+ * reviewer sees what still needs attention as soon as they open
+ * the page. Chips share the generic `.feedback-status-badge`
+ * aesthetic but are interactive and carry a count. */
+.feed-view-filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.feed-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #0d1118;
+  border: 1px solid #232833;
+  border-radius: 999px;
+  color: #c2cbdc;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.feed-filter-chip:hover {
+  background: #161c26;
+  border-color: #2f3949;
+  color: #ecf0f7;
+}
+.feed-filter-chip.is-active[data-filter='open'] {
+  background: rgba(255, 207, 106, 0.14);
+  border-color: rgba(255, 207, 106, 0.55);
+  color: #ffd487;
+}
+.feed-filter-chip.is-active[data-filter='resolved'] {
+  background: rgba(120, 230, 160, 0.14);
+  border-color: rgba(120, 230, 160, 0.55);
+  color: #9ee8bf;
+}
+.feed-filter-chip.is-active[data-filter='all'] {
+  background: rgba(140, 180, 255, 0.12);
+  border-color: rgba(140, 180, 255, 0.5);
+  color: #c6d6ff;
+}
+.feed-filter-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.feed-empty-filter {
+  padding: 18px 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* Tooltip: stack the status badge on the same line as the time so
+ * the whole block stays glanceable. The resolved-state accent is a
+ * subtle border tint — the card is already tiny, we don't need
+ * more than that. */
+.feedback-tooltip-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.feedback-tooltip.is-resolved {
+  border-color: rgba(120, 230, 160, 0.45);
+}
+
+/* Speech bubbles: switch the warm accent to mint when resolved
+ * and dim the body so V-overview scans as a map of remaining
+ * open work. We restyle the tail via a descendant selector so
+ * the combined .is-resolved bubble has a consistent border. */
+.feedback-bubble-meta-top {
+  margin-top: 0;
+  margin-bottom: 4px;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  justify-content: center;
+}
+.feedback-bubble.is-resolved .feedback-bubble-body {
+  border-color: rgba(120, 230, 160, 0.55);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(120, 230, 160, 0.1) inset;
+  opacity: 0.82;
+}
+.feedback-bubble.is-resolved .feedback-bubble-tail {
+  border-right-color: rgba(120, 230, 160, 0.55);
+  border-bottom-color: rgba(120, 230, 160, 0.55);
 }
 

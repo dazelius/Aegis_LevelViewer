@@ -41,8 +41,18 @@ import { Shooter, type CameraRecoilAPI } from '../lib/Shooter';
 import { defaultPose, findNodeWorldPosition, type PlayerPose } from '../lib/playerPose';
 import { playModeState, resetPlayModeState } from '../lib/playModeState';
 import { FeedbackComposer, type FeedbackCaptureContext } from '../lib/FeedbackComposer';
+import { FeedbackBubblesOverlay } from '../lib/FeedbackBubblesOverlay';
+import {
+  isShowAllActive as isBubblesShowAllActive,
+  setShowAllActive as setBubblesShowAllActive,
+} from '../lib/feedbackBubbles';
 import { FeedbackPins } from '../lib/FeedbackPins';
 import { FeedbackPanel } from '../lib/FeedbackPanel';
+import { FeedbackTooltip } from '../lib/FeedbackTooltip';
+import { RemotePlayers } from '../lib/RemotePlayers';
+import { LocalPoseBroadcaster } from '../lib/LocalPoseBroadcaster';
+import { ChatHUD } from '../lib/ChatHUD';
+import { ensureConnected, setCurrentScene } from '../lib/multiplayer';
 
 export default function LevelViewer() {
   const params = useParams();
@@ -248,6 +258,16 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
   // swap) and `playModeState.crouching` stays in sync for the non-
   // React-rendering consumers (PlayerController, CharacterAvatar).
   const [crouching, setCrouching] = useState(false);
+  // ADS (aim down sights) toggle — held while the right mouse button
+  // is down. Drives the ShoulderCamera preset swap (Stand_Default →
+  // Stand_Aim: narrower FOV, shoulder pulled in, tighter look
+  // sensitivity) and propagates into `playModeState.aiming` so
+  // CharacterAvatar can play the shouldered aim clip even when the
+  // trigger isn't held. Distinct React state (not just a ref) because
+  // the preset prop on ShoulderCamera needs to re-render on change —
+  // the per-frame easing inside ShoulderCamera handles the smooth
+  // transition from there.
+  const [aiming, setAiming] = useState(false);
   // Feedback composer state. When non-null, the modal is open with
   // the frozen capture context (thumbnail / aim / camera pose).
   // While the composer is up we intentionally release pointer lock
@@ -262,6 +282,18 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
   useEffect(() => {
     composerOpenRef.current = composer !== null;
   }, [composer]);
+
+  // Multiplayer room membership. Joining the room (keyed by scene
+  // path) lets remote players see our avatar, and subscribes us to
+  // chat + feedback realtime events. Leave on unmount so navigating
+  // away cleans up presence for everyone else.
+  useEffect(() => {
+    ensureConnected();
+    setCurrentScene(relPath);
+    return () => {
+      setCurrentScene('');
+    };
+  }, [relPath]);
   const playerHandleRef = useRef<PlayerControllerHandle>(null);
   const orbitRef = useRef<OrbitControlsRef | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -344,6 +376,9 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
     // re-enters would find themselves already crouched, with no
     // visible UI affordance to undo it.
     setCrouching(false);
+    // Drop ADS too — RMB state is transient; re-entering Play
+    // should open in the neutral non-aiming pose.
+    setAiming(false);
     if (document.pointerLockElement) {
       document.exitPointerLock();
     }
@@ -357,8 +392,16 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
     playModeState.crouching = crouching;
   }, [crouching]);
 
+  // Same bridge for the `aiming` flag — CharacterAvatar reads it
+  // every frame to pick the shouldered aim clip instead of the
+  // relaxed idle / sprint, and PlayerController reads it to slow
+  // movement slightly while the scope is up.
+  useEffect(() => {
+    playModeState.aiming = aiming;
+  }, [aiming]);
+
   // Drive a top-level body class while in Play mode so the global
-  // app chrome (header with "Aegis Level Viewer" title, Back/Scenes
+  // app chrome (header with Aegisgram brand, Back/Scenes
   // buttons, Git Sync) can hide itself via CSS. The header is rendered
   // by `App.tsx` — a parent of this route — so we can't conditionally
   // unmount it from here without threading state up. Toggling a body
@@ -384,6 +427,52 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, [playMode]);
+
+  // Right mouse button → aim down sights (hold). The gesture is
+  // deliberately HOLD-to-aim rather than toggle because that matches
+  // the muscle memory of every shooter users are likely to know;
+  // toggling would also desync badly with the trigger (LMB) when the
+  // user pulls both at once.
+  //
+  // Listens on the window rather than the canvas so a button release
+  // outside the canvas area (dragging the mouse off screen, alt-
+  // tabbing) still clears the aiming flag — we never want to strand
+  // the player in permanent ADS because the mouseup event was
+  // captured by some other element. `contextmenu` is swallowed on
+  // the canvas so the native right-click menu doesn't pop while the
+  // user is just aiming; it stays functional on the surrounding
+  // editor UI.
+  useEffect(() => {
+    if (!playMode) return;
+    const canvas = canvasRef.current;
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      // Block ADS while a modal (feedback composer, chat input) has
+      // suppressed player input — otherwise right-clicking through
+      // the composer to clear Chrome's gesture would silently zoom
+      // the camera under the modal.
+      if (playModeState.inputSuppressed) return;
+      setAiming(true);
+    };
+    const onUp = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      setAiming(false);
+    };
+    const onBlur = () => setAiming(false);
+    const onCtx = (e: Event) => {
+      e.preventDefault();
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('blur', onBlur);
+    canvas?.addEventListener('contextmenu', onCtx);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('blur', onBlur);
+      canvas?.removeEventListener('contextmenu', onCtx);
+    };
   }, [playMode]);
 
   // Bind Play mode to pointer-lock ownership. When the browser
@@ -515,6 +604,43 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
     };
     canvas.addEventListener('click', onClick);
     return () => canvas.removeEventListener('click', onClick);
+  }, [playMode]);
+
+  // Press V in Play mode → toggle the "show every feedback at once"
+  // overlay. It's a latched on/off switch (not hold-to-reveal) so the
+  // user can keep the overview visible while looking around with the
+  // mouse — useful for the "where did everyone drop notes on this
+  // map" browsing loop.
+  //
+  // Guards:
+  //   - `e.repeat` is ignored so holding V doesn't flip the state
+  //     over and over at the browser's auto-repeat rate.
+  //   - `playModeState.inputSuppressed` blocks activation while the
+  //     chat HUD or feedback composer has focus; otherwise typing
+  //     the letter "v" would secretly toggle the overlay.
+  //
+  // Exit paths that auto-clear the flag:
+  //   - Leaving Play mode (effect cleanup) — the overlay belongs to
+  //     the in-session HUD, not the edit-mode surface.
+  // We deliberately DO NOT reset on blur / pointer-lock change any
+  // more: a toggle should persist across these transitions so the
+  // user doesn't have to re-press V after alt-tabbing back in.
+  useEffect(() => {
+    if (!playMode) {
+      setBubblesShowAllActive(false);
+      return;
+    }
+    const onDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (e.code !== 'KeyV' && e.key !== 'v' && e.key !== 'V') return;
+      if (playModeState.inputSuppressed) return;
+      setBubblesShowAllActive(!isBubblesShowAllActive());
+    };
+    window.addEventListener('keydown', onDown);
+    return () => {
+      setBubblesShowAllActive(false);
+      window.removeEventListener('keydown', onDown);
+    };
   }, [playMode]);
 
   return (
@@ -699,7 +825,7 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
                   not the over-the-shoulder rig. */}
               <ShoulderCamera
                 playerHandle={playerHandleRef}
-                preset="Stand_Default"
+                preset={aiming ? 'Stand_Aim' : 'Stand_Default'}
                 crouching={crouching}
                 initialPitch={initialPose.cameraPitch}
                 initialYaw={initialPose.cameraYaw}
@@ -715,6 +841,13 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
                 canvasRef={canvasRef}
                 cameraRecoilRef={cameraRecoilRef}
               />
+              {/* Broadcasts our local pose + animation state to the
+                  multiplayer hub at ~20 Hz so other viewers' clients
+                  can render our avatar walking around their scene. */}
+              <LocalPoseBroadcaster
+                playerHandleRef={playerHandleRef}
+                playMode={playMode}
+              />
             </>
           )}
           {/* Feedback pins — render in both play and edit modes so
@@ -722,6 +855,11 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
               walk-through. `scenePath` keys the list so switching
               scenes filters cleanly. */}
           <FeedbackPins scenePath={relPath} />
+          {/* Remote-player avatars for everyone else currently in
+              this scene's multiplayer room. Rendered at all times
+              so edit-mode reviewers can see Play-mode reviewers
+              walking around the map. */}
+          <RemotePlayers />
           <axesHelper
             args={[Math.min(5, framing.radius * 0.1)]}
             userData={{ noCollide: true }}
@@ -764,12 +902,29 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
         // pure no-UI clue for "press Enter to mark where you're
         // looking" would be invisible to anyone but us.
         <div className="play-status play-status-minimal">
-          <span className="play-status-hint">Enter: 피드백 · Esc: 나가기</span>
+          <span className="play-status-hint">Enter: 피드백 · V: 전체 보기 토글 · Esc: 나가기</span>
         </div>
       )}
       {/* Feedback panel — list of authored feedbacks, edit-mode only.
           Hidden during Play so it doesn't clutter the game view. */}
       {!playMode && <FeedbackPanel scenePath={relPath} />}
+      {/* Floating preview card that appears when the Play-mode
+          crosshair lands on a feedback pin. Gated to Play mode
+          only — in editor mode the full FeedbackPanel is already
+          visible on the side, so a second hover card would fight it
+          for attention. */}
+      {playMode && <FeedbackTooltip scenePath={relPath} />}
+      {/* "Show every feedback at once" overlay — speech bubbles above
+          every pin while the user holds V. Kept in the DOM (not R3F)
+          so text is laid out by the browser's font stack and can be
+          any length without blowing up GPU memory. */}
+      {playMode && <FeedbackBubblesOverlay scenePath={relPath} />}
+      {/* Multiplayer chat + presence HUD. Always visible (both Play
+          and edit) so a lurker in edit mode can still talk to Play
+          mode users and vice versa. Input field self-raises the
+          same inputSuppressed flag the feedback composer uses so
+          typing doesn't walk the character. */}
+      <ChatHUD />
       {/* Feedback composer — HTML modal that takes the text body.
           Rendered outside the Canvas so it receives normal DOM
           focus / keyboard events. Closes via either submit or Esc;
@@ -1120,7 +1275,13 @@ function InspectorPanel({
                 return (
                   <>
                     {visible.map((g, i) => {
-                      const m = g && materials?.[g];
+                      // Narrow `m` to `MaterialJson | undefined`. Using
+                      // `g && materials?.[g]` would leak the empty-string
+                      // case of `g` into `m`'s type, and TS then refuses
+                      // to let us read fields like `baseMapTiling` even
+                      // through an optional chain — `?.` only short-circuits
+                      // on null/undefined, not on `""`.
+                      const m = g ? materials?.[g] : undefined;
                       const tile = m?.baseMapTiling;
                       const off = m?.baseMapOffset;
                       const fmt = (n: number): string => n.toFixed(2);
@@ -1203,7 +1364,7 @@ function InspectorPanel({
           {(node.light.type === 'Point' || node.light.type === 'Spot') && (
             <div className="inspector-row">
               <span className="inspector-label">Range</span>
-              <span className="inspector-val">{fmt(node.light.range)}</span>
+              <span className="inspector-val">{fmt(node.light.range ?? 0)}</span>
             </div>
           )}
         </>
@@ -1767,6 +1928,18 @@ function UnityExportCanvas({ scene, relPath }: { scene: UnityExport; relPath: st
   const stats = useMemo(() => getUnityExportStats(scene), [scene]);
   const framingRaw = useMemo(() => computeUnityExportFraming(scene), [scene]);
 
+  // Baked-preview path doesn't have PlayerController / Play mode yet,
+  // but we still join the multiplayer room so users browsing the
+  // high-fidelity preview can chat and receive realtime feedback
+  // events alongside reviewers using the YAML viewer.
+  useEffect(() => {
+    ensureConnected();
+    setCurrentScene(relPath);
+    return () => {
+      setCurrentScene('');
+    };
+  }, [relPath]);
+
   // Same diagnostic toggles as the YAML path — baked Unity exports still
   // exhibit the "materials look wrong" symptom when UVs or submesh ordering
   // are off, so the same visualizations apply here.
@@ -1865,6 +2038,7 @@ function UnityExportCanvas({ scene, relPath }: { scene: UnityExport; relPath: st
           <axesHelper args={[Math.min(5, radius * 0.1)]} />
         </Suspense>
       </Canvas>
+      <ChatHUD />
     </div>
   );
 }

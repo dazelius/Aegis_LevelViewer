@@ -5,6 +5,7 @@ import {
   makeFeedbackId,
   type Feedback,
 } from './feedbackStore';
+import { playModeState } from './playModeState';
 
 /**
  * HTML overlay that lets the player author a short feedback tied to
@@ -65,6 +66,22 @@ export function FeedbackComposer({
     t.focus();
   }, []);
 
+  // Raise the global input-suppression flag so PlayerController
+  // freezes the character and stops consuming WASD / Space / Shift
+  // while the composer is open. Without this, the user's
+  // "awesome wall!" textarea keystrokes also move the avatar — a
+  // confusing "why am I sprinting sideways while typing" bug the
+  // user reported ("피드백쓸때 키보드를 치면 wasd 같은걸 입력하면
+  // 캐릭터 이동으로 전달된다"). We pair it with the focus effect
+  // above so the moment the modal can accept text, the game input
+  // is already blocked.
+  useEffect(() => {
+    playModeState.inputSuppressed = true;
+    return () => {
+      playModeState.inputSuppressed = false;
+    };
+  }, []);
+
   const cancel = useCallback(() => {
     onClose(null);
   }, [onClose]);
@@ -89,6 +106,19 @@ export function FeedbackComposer({
       thumbnail: capture.thumbnail,
       cameraPose: capture.cameraPose,
       playerPose: capture.playerPose,
+      // New records start with empty social state. The store's
+      // upsert preserves existing likes / comments when a record
+      // with the same id is replaced, so this default never stomps
+      // on accumulated reactions.
+      likes: [],
+      comments: [],
+      // Brand-new feedback always starts in the 'open' review
+      // state — that's the whole point of posting one ("I need
+      // somebody to look at this"). Transitioning to 'resolved'
+      // happens later via the dedicated status button on each card.
+      status: 'open',
+      resolvedAt: null,
+      resolvedBy: '',
     };
     addFeedback(fb);
     onClose(fb);

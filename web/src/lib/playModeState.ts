@@ -85,6 +85,36 @@ export interface PlayModeState {
    *  it's effectively "in the sky" and would drift if the camera
    *  moves. */
   aimValid: boolean;
+
+  /** When true, PlayerController freezes the character and drops
+   *  every keyboard event on the floor. Raised by the feedback
+   *  composer for the duration of the modal so the user can type
+   *  a paragraph with WASD / Space / Shift without the avatar
+   *  sprinting into a wall behind them. Cleared the moment the
+   *  modal closes — the useFrame loop picks up fresh input on the
+   *  next tick as if nothing happened.
+   *
+   *  NOT a React state because the check runs in `useFrame` where
+   *  Zustand-ish reactivity is overkill; a plain mutable flag is
+   *  the simplest thing that works. */
+  inputSuppressed: boolean;
+
+  /** True while the user is holding the right mouse button to ADS
+   *  (aim down sights). Drives:
+   *    - ShoulderCamera: swap to the `Stand_Aim` / `Crouch_Aim`
+   *      preset so the FOV narrows and the shoulder pulls in.
+   *    - CharacterAvatar: play the shouldered "aim run" / "aim idle"
+   *      clips that already exist for the firing pose, even when
+   *      the trigger isn't held — aiming without firing is the
+   *      intermediate pose the character adopts when the user
+   *      levels the weapon.
+   *    - PlayerController: mildly slow movement so fine tracking
+   *      under the scope feels tactile, not like a sprint with
+   *      a narrow FOV grafted on top.
+   *
+   *  Separate from `firing` because the trigger is LMB and ADS
+   *  is RMB; both can be active independently. */
+  aiming: boolean;
 }
 
 function defaults(): PlayModeState {
@@ -96,6 +126,8 @@ function defaults(): PlayModeState {
     crouching: false,
     aimPoint: new THREE.Vector3(),
     aimValid: false,
+    inputSuppressed: false,
+    aiming: false,
   };
 }
 
@@ -115,4 +147,6 @@ export function resetPlayModeState(): void {
   playModeState.crouching = false;
   playModeState.aimPoint.set(0, 0, 0);
   playModeState.aimValid = false;
+  playModeState.inputSuppressed = false;
+  playModeState.aiming = false;
 }

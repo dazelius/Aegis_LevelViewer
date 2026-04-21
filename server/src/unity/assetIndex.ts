@@ -119,7 +119,17 @@ class AssetIndex {
           .join('/');
         const relPath = `${entry.root.name}/${rootRel}`;
         const ext = path.extname(absPath).toLowerCase();
-        return { guid, absPath, relPath, ext, source: entry.root.name };
+        // `entry.root.name` is typed as the broader string union `(typeof
+        // roots)[number]['name']` because the `roots` array is inferred
+        // from its literal shape; the call sites only push objects whose
+        // name is an `AssetRecord['source']`, so the cast is safe.
+        return {
+          guid,
+          absPath,
+          relPath,
+          ext,
+          source: entry.root.name as AssetRecord['source'],
+        };
       } catch {
         return null;
       }

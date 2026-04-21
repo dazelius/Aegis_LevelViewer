@@ -57,6 +57,12 @@ export interface PlayerControllerHandle {
   /** Live mutable reference to the player group. ShoulderCamera
    *  follows this each frame without copying state. */
   group: THREE.Group | null;
+  /** Current locomotion state — exposed so the multiplayer hub
+   *  pose publisher can tell other clients which clip the local
+   *  character is playing, and their remote avatar renderer can
+   *  echo it back. Safe to poll every frame; the underlying ref
+   *  is mutated in place without React reconciliation. */
+  getAnimState(): AnimState;
 }
 
 export interface PlayerControllerProps {
@@ -184,6 +190,9 @@ export const PlayerController = forwardRef<PlayerControllerHandle, PlayerControl
             cameraDistance: initialPose.cameraDistance,
           };
         },
+        getAnimState(): AnimState {
+          return animStateRef.current;
+        },
       }),
       [initialPose],
     );
@@ -215,6 +224,21 @@ export const PlayerController = forwardRef<PlayerControllerHandle, PlayerControl
       const g = groupRef.current;
       if (!g) return;
       const dt = Math.min(deltaRaw, 0.1);
+
+      // --- Input suppression (feedback composer open) ------------------
+      // While the composer modal is up we freeze the character: drop
+      // any stuck keyboard state, force the idle animation, and bail
+      // before reading WASD / Space / Shift so typing "awesome wall"
+      // in the feedback textarea doesn't also send the avatar
+      // charging sideways. The camera subsystem keeps rendering so
+      // the thumbnail-anchored view remains on screen as a backdrop
+      // for the composer.
+      if (playModeState.inputSuppressed) {
+        heldKeys.current.clear();
+        vyRef.current = 0;
+        animStateRef.current = 'idle';
+        return;
+      }
 
       // Camera-relative flat XZ basis.
       _camForward.setFromMatrixColumn(camera.matrixWorld, 2).negate();
@@ -254,8 +278,16 @@ export const PlayerController = forwardRef<PlayerControllerHandle, PlayerControl
           if (playModeState.firing) speed *= firingMoveMultiplier;
         } else if (playModeState.firing) {
           speed = moveSpeed * firingMoveMultiplier;
-        } else if (sprint) {
+        } else if (sprint && !playModeState.aiming) {
+          // Aiming cancels sprint — you can't hip-sprint with a scoped
+          // rifle levelled at a target. Feels correct in every shooter.
           speed = moveSpeed * sprintMultiplier;
+        } else if (playModeState.aiming) {
+          // Un-firing ADS: walk at the same "careful aim" pace the
+          // firing multiplier gives us. Same number, different reason —
+          // the player is still committed to the aim pose so their
+          // locomotion budget is the same as if they were shooting.
+          speed = moveSpeed * firingMoveMultiplier;
         } else {
           speed = moveSpeed;
         }
@@ -535,6 +567,21 @@ function useHeldKeys() {
   useEffect(() => {
     const keys = ref.current;
     const down = (e: KeyboardEvent) => {
+      // When the feedback composer is up (or any other modal that
+      // raises inputSuppressed) the character must not react to
+      // keypresses the user is directing at a text field. We also
+      // avoid preventDefault on Space here — the textarea needs it
+      // for "insert space between words".
+      if (playModeState.inputSuppressed) return;
+      // Also ignore keys coming from inside a text input / textarea
+      // regardless of the suppression flag. Catches the edge case
+      // where another input widget (e.g. the inspector search box
+      // in a future UI pass) has focus while the pointer happens
+      // to be locked — the player shouldn't walk while typing.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+        return;
+      }
       keys.add(e.code);
       // Space is the browser's default page-scroll binding; we eat
       // it here so the viewer page doesn't jump when the player
