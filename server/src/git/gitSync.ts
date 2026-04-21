@@ -10,6 +10,7 @@ import {
   getSparsePaths,
 } from '../config.js';
 import { getLfsProxyInfo } from './lfsProxy.js';
+import { scheduleInRepo } from './repoLock.js';
 
 /**
  * Persist `AEGISGRAM_GIT_URL_REWRITES` into the local repo's
@@ -430,7 +431,14 @@ export async function syncUnityRepo(opts: { force?: boolean } = {}): Promise<Syn
 
   try {
     console.log(`[gitSync] Pulling ${localDir}`);
-    await pullSparse(localDir);
+    // Serialise against lazyLfs. Both take `.git/index.lock` for
+    // their checkout phases (reset --hard here, lfs checkout there);
+    // running concurrently hard-fails one of them with
+    // "Unable to create '.git/index.lock': File exists" and leaves
+    // the repo in a half-baked state that only the NEXT sync will
+    // opportunistically fix — which is exactly the symptom the user
+    // reports where "Git Sync" is required to unstick a scene load.
+    await scheduleInRepo(() => pullSparse(localDir));
     const head = await headShort(localDir);
     return { action: 'pulled', localDir, head };
   } catch (err) {

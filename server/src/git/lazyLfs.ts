@@ -38,6 +38,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { simpleGit } from 'simple-git';
 import { assetIndex } from '../unity/assetIndex.js';
+import { scheduleInRepo } from './repoLock.js';
 
 // ---------------------------------------------------------------------------
 // LFS pointer detection
@@ -88,9 +89,6 @@ function extractGuidsFromFile(absPath: string): string[] {
 
 /** Per-absolute-path in-flight deduplication. */
 const inFlight = new Map<string, Promise<void>>();
-
-/** Per-repo sequential lock — one `git lfs fetch` at a time. */
-let repoChain: Promise<void> = Promise.resolve();
 
 /** Has `git lfs env` diagnostic already been emitted? First failure is
  *  usually all we need to diagnose endpoint/auth issues. */
@@ -156,15 +154,6 @@ async function reportLfsEnvOnce(repoDir: string): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[lazyLfs] LFS log dump failed: ${msg}`);
   }
-}
-
-function scheduleInRepo(task: () => Promise<void>): Promise<void> {
-  const next = repoChain.then(task, task); // always advance the chain
-  repoChain = next.then(
-    () => {},
-    () => {},
-  );
-  return next;
 }
 
 // ---------------------------------------------------------------------------
