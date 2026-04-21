@@ -192,7 +192,33 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       if (batch.length <= 5) {
         for (const p of batch) console.log(`[lazyLfs]   - ${p}`);
       }
-      await git.raw(['-c', 'lfs.skipdownloaderrors=true', 'lfs', 'fetch', '--include', include]);
+      // Deliberately do NOT pass `lfs.skipdownloaderrors=true` here.
+      // Under skipdownloaderrors, git-lfs swallows per-object failures
+      // (401 / 404 / timeout) and exits 0 with no blob on disk — we
+      // get silent breakage that looks like a successful fetch. For
+      // lazy, single-file fetches we'd rather see the real error so
+      // it surfaces in the catch block below and we can act on it.
+      // `lfs.transfer.maxretries=1` shortens the wall-time of an
+      // unreachable LFS endpoint from minutes to seconds — lazy LFS
+      // is on the user's request path, so we can't afford to hang.
+      //
+      // Wall-clock timeout (90 s) is belt-and-suspenders: if git-lfs
+      // somehow wedges despite its own activitytimeout, we reject the
+      // chain so subsequent requests don't queue behind a dead fetch.
+      const FETCH_TIMEOUT_MS = 90_000;
+      const fetchPromise = git.raw([
+        '-c', 'lfs.transfer.maxretries=1',
+        'lfs', 'fetch', '--include', include,
+      ]);
+      await Promise.race([
+        fetchPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`git lfs fetch wall-clock timeout (${FETCH_TIMEOUT_MS}ms)`)),
+            FETCH_TIMEOUT_MS,
+          ),
+        ),
+      ]);
       // Smudge pass: materialise cached objects into the working tree.
       // `git lfs checkout` (no file args) smudges every pointer whose
       // blob is now in `.git/lfs/objects` — safe to run after each
