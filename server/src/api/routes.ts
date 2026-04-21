@@ -663,18 +663,33 @@ apiRouter.get('/assets/mesh', async (req: Request, res: Response) => {
     let buf = await fs.readFile(rec.absPath);
     if (isLfsPointerBuf(buf)) {
       if (!bundleMode) {
-        // Fire-and-forget: see texture handler above. A blocking
-        // await here can blow the platform's ~30 s proxy timeout
-        // and surface as 502 to the user. Return 409 immediately;
-        // the client retries with backoff.
-        triggerLfsFetch(rec.absPath, getRepo2LocalDir());
+        // Wait synchronously for a bounded window before giving up on
+        // a pointer. 85 concurrent FBX requests at scene-open land on
+        // this handler nearly simultaneously; the lazyLfs coalescer
+        // merges them into a single batched `git lfs fetch`, so the
+        // first request blocks ~5–15 s but the remaining 84 join that
+        // same in-flight promise and complete in the same window.
+        // Net result: one handler trip per FBX instead of the
+        // previous 6× retry loop at 2.5 s each (~15 s) that often
+        // gave up before the blob had landed on disk.
+        const MESH_SYNC_WAIT_MS = 20_000;
+        await ensureLfsFile(rec.absPath, getRepo2LocalDir(), MESH_SYNC_WAIT_MS);
+        // Re-read after the wait; the file may now be a real blob.
+        buf = await fs.readFile(rec.absPath);
       }
-      res.status(409).json({
-        error: 'lfs-pointer',
-        hint: 'LFS fetch in progress or upstream blob missing — retry shortly',
-        relPath: rec.relPath,
-      });
-      return;
+      if (isLfsPointerBuf(buf)) {
+        // Still a pointer after the sync wait — fall back to 409 so
+        // the client's (now much shorter) retry loop can poll. Make
+        // sure the fetch is still queued in case the earlier batch
+        // completed without landing this specific blob.
+        triggerLfsFetch(rec.absPath, getRepo2LocalDir());
+        res.status(409).json({
+          error: 'lfs-pointer',
+          hint: 'LFS fetch in progress or upstream blob missing — retry shortly',
+          relPath: rec.relPath,
+        });
+        return;
+      }
     }
     const contentType =
       ext === '.fbx'

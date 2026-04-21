@@ -263,15 +263,16 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
   const url = apiUrl(`/api/assets/mesh?guid=${encodeURIComponent(guid)}`);
 
   // 409 from the server means "this is still an LFS pointer — retry
-  // shortly". The server triggers a background `git lfs fetch` the
-  // moment the scene is opened, so the blob is usually on disk within
-  // a few seconds. Retry a handful of times with linear backoff before
-  // falling through to the placeholder. This is what makes the viewer
-  // usable on platform deploys where LFS download happens lazily: the
-  // first scene-open request is "primed" by the time the client loops
-  // back for the FBX a second time.
-  const MAX_LFS_RETRIES = 6;
-  const LFS_RETRY_MS = 2500;
+  // shortly". The server now waits up to ~20 s synchronously and
+  // coalesces concurrent requests into batched git-lfs fetches, so
+  // the first 409 typically only appears on very large blobs. When
+  // we do see one, loop with a longer backoff so we cover pathological
+  // cases (huge FBX, saturated LFS endpoint) without timing out
+  // prematurely. Budget: ~80 s total, matching the scene-fetch
+  // retry budget so the viewer doesn't abandon a mesh while the
+  // scene itself is still loading.
+  const MAX_LFS_RETRIES = 20;
+  const LFS_RETRY_MS = 4000;
   let res: Response | null = null;
   for (let attempt = 0; attempt <= MAX_LFS_RETRIES; attempt += 1) {
     try {
@@ -620,13 +621,43 @@ function empty(status: FbxStatus, reason?: string): FbxEntry {
   };
 }
 
+/**
+ * Timestamp of the last failed attempt per GUID (`lfs-pointer` failures
+ * only — not parse errors or 404s, which are truly terminal). We let
+ * those entries expire after `LFS_FAIL_COOLDOWN_MS` so the client
+ * transparently re-requests the asset once the background git-lfs
+ * fetch has had time to land. Without this, a single scene-open wave
+ * that outruns the LFS fetch budget would permanently mark 29/85
+ * meshes as "failed" until the user hard-reloads the page.
+ */
+const lfsFailAt = new Map<string, number>();
+const LFS_FAIL_COOLDOWN_MS = 45_000;
+
 export function loadFbx(guid: string): Promise<FbxEntry> {
   const key = guid.toLowerCase();
   let existing = cache.get(key);
-  if (!existing) {
-    existing = fetchAndParse(key);
-    cache.set(key, existing);
+  if (existing) {
+    // Allow a retry once a previously-cached lfs-pointer failure has
+    // cooled down. Any other terminal status (parse error, 404,
+    // generic error) stays cached forever — those won't get better
+    // on retry.
+    const failedAt = lfsFailAt.get(key);
+    if (failedAt && Date.now() - failedAt > LFS_FAIL_COOLDOWN_MS) {
+      lfsFailAt.delete(key);
+      existing = fetchAndParse(key).then((entry) => {
+        if (entry.status === 'lfs-pointer') lfsFailAt.set(key, Date.now());
+        return entry;
+      });
+      cache.set(key, existing);
+      return existing;
+    }
+    return existing;
   }
+  existing = fetchAndParse(key).then((entry) => {
+    if (entry.status === 'lfs-pointer') lfsFailAt.set(key, Date.now());
+    return entry;
+  });
+  cache.set(key, existing);
   return existing;
 }
 
