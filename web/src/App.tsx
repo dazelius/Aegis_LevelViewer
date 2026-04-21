@@ -121,6 +121,24 @@ export default function App() {
   // once the first poll lands, so the two are effectively OR'd.
   const syncActive = syncing || lfsStatus?.sync?.running === true;
 
+  // If the user is currently viewing a specific scene (`/level/<path>`),
+  // hand that path to the sync endpoint so the post-sync LFS warm-up
+  // narrows to THAT scene's asset graph instead of walking every .mat
+  // and image in the repo. On a large Unity project the full bulk
+  // pass runs for several minutes; a scene-scoped sync typically
+  // completes in under 10 s. On the level grid (no scene context) we
+  // fall through to the default full-bulk behaviour, which is the
+  // right trade-off there — the reviewer might click any tile next.
+  function currentScenePath(): string | undefined {
+    const match = loc.pathname.match(/\/level\/(.+)$/);
+    if (!match) return undefined;
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+
   async function handleSync() {
     if (syncActive) return;
     setSyncing(true);
@@ -130,7 +148,8 @@ export default function App() {
       // the old blocking endpoint was showing up as 504 Gateway
       // Time-out). We don't await the whole sync — we just kick it
       // off and let the /api/lfs-status poller above drive the UI.
-      await apiPost('/api/sync');
+      const scenePath = currentScenePath();
+      await apiPost('/api/sync', scenePath ? { scenePath } : undefined);
       const s = await apiGet<LfsStatus>('/api/lfs-status');
       setLfsStatus(s);
     } catch (err) {
@@ -287,11 +306,33 @@ export default function App() {
           returns 501. Hide the button rather than let it return a
           confusing error when clicked.
         */}
-        {mode === 'live' && (
-          <button type="button" onClick={handleSync} disabled={syncActive}>
-            {syncActive ? 'Syncing…' : 'Git Sync'}
-          </button>
-        )}
+        {mode === 'live' && (() => {
+          // Label + tooltip reflect the scope the server will actually
+          // apply. On a scene page we narrow to that scene's assets;
+          // elsewhere it's a full-repo sync. Making the scope visible
+          // in the button prevents "why is sync running for 5 min?"
+          // confusion when the user only cares about one map.
+          const scenePath = currentScenePath();
+          const sceneName = scenePath?.split('/').pop()?.replace(/\.unity$/, '');
+          const title = scenePath
+            ? `Git Sync · 이 씬(${sceneName})의 LFS만 받아옵니다`
+            : 'Git Sync · 전체 레포를 pull하고 모든 머티리얼/텍스처를 받아옵니다';
+          const label = syncActive
+            ? 'Syncing…'
+            : scenePath
+              ? `Git Sync (이 씬)`
+              : 'Git Sync';
+          return (
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={syncActive}
+              title={title}
+            >
+              {label}
+            </button>
+          );
+        })()}
       </header>
       <main className="app-main">
         <Outlet />

@@ -246,29 +246,28 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
   }
 
   // If the scene file itself is still a Git LFS pointer, try to
-  // materialise it synchronously within the platform proxy's
-  // upstream timeout (~30 s). The previous implementation returned
-  // 409 immediately and relied purely on client polling, which —
-  // when the repo lock was busy with a concurrent gitSync pull —
-  // produced 15+ visible "still a pointer" rounds for what is really
-  // a 2–5 s LFS download. Blocking here collapses that into a single
-  // request: the user clicks a level, the server does the "sync on
-  // click" work, and the scene JSON arrives in one response.
+  // materialise it synchronously — but strictly within the platform
+  // proxy's upstream timeout. Going over that yields a bare 504
+  // Gateway Time-out with no retry hint (the user can't even tell
+  // whether the fetch is progressing), so we cap all server-side
+  // waits well under the observed proxy limit.
   //
-  // Budget: we need to fit scene-fetch + .mat-pre-fetch + scene-parse
-  // + JSON serialise under the platform's ~60 s proxy kill. Rough
-  // allocation (tuned after observing real retries on large scenes):
-  //     scene LFS fetch      up to 45 s   ← bumped from 16 s
-  //     .mat/.prefab prefetch up to  8 s
-  //     parseScene + JSON           ~2–4 s
-  //     headroom                    ~3–5 s
-  // The fatter per-request budget collapses the common case (cold
-  // scene on a fast internal endpoint = 20–30 s end to end) into ONE
-  // attempt instead of cycling through 3+ client retries at ~19 s
-  // each. If we do exceed 45 s the 409 fallback still kicks in and
-  // the client joins the same in-flight fetch on its next retry.
+  // Observed proxy kill: ~30 s (nginx default). Previous 45 s + 20 s
+  // budget let scene+mat waits stack to 65 s and reproduce 504 on
+  // cold opens. New allocation, hard-capped at ~25 s total:
+  //     scene LFS fetch       up to 12 s   ← was 45 s
+  //     .mat/.prefab prefetch up to 10 s   ← was 20 s
+  //     parseScene + JSON            ~2–3 s
+  //     headroom                     ~0–3 s
+  //
+  // If 12 s isn't enough for the scene blob, we return 409 and let
+  // the client's retry loop (MAX_ATTEMPTS=12 × 5 s = 60 s total)
+  // piggy-back on the already-registered in-flight fetch. That turns
+  // a "huge scene on slow LFS" case into 2–3 visible retry ticks
+  // instead of a hard 504 with no feedback — which is strictly
+  // better UX than the previous 45 s single-shot approach.
   const repoDir = getRepo2LocalDir();
-  const SYNC_WAIT_MS = 45_000;
+  const SYNC_WAIT_MS = 12_000;
   try {
     const head = await fs.readFile(absPath);
     if (isLfsPointerBuf(head)) {
@@ -308,12 +307,22 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
   // scene references that is still an LFS pointer. Without this pass,
   // the material parser reads pointer-text as YAML, silently produces
   // undefined materials, and three.js paints every surface magenta.
-  // Bounded at ~6 s so a slow LFS endpoint degrades gracefully rather
-  // than blowing the platform's ~30 s proxy timeout — any materials
-  // that don't make it in time will be re-requested on the client's
-  // next scene open once the inFlight promise completes.
+  //
+  // Timeout budget 10 s: must fit under the platform's ~30 s proxy
+  // limit AFTER the 12 s scene LFS wait above and leave room for
+  // parseScene itself (2–3 s on big scenes). The LFS fetch now runs
+  // on a separate chain (`scheduleLfsFetch`) that is NOT blocked by
+  // a concurrent `reset --hard` from Git Sync, so blob downloads for
+  // ~14 .mat files finish in 2–5 s even mid-sync. The final `git lfs
+  // checkout` waits behind reset's index-lock hold, but we now invoke
+  // it with explicit batch paths (see doFetchBatch) so that step is
+  // sub-second rather than a full-repo scan. 10 s is plenty for the
+  // common case; anything slower falls through to parseScene, which
+  // will render with whatever materials landed — the remainder is
+  // refilled by the client's inFlight-aware retry on the next scene
+  // open since `registerBatch` keeps them queued.
   try {
-    await ensureSceneYamlPointersReady(absPath, repoDir, 8_000);
+    await ensureSceneYamlPointersReady(absPath, repoDir, 10_000);
   } catch {
     // Never propagate — missing materials are a cosmetic regression,
     // not a reason to 500 the whole scene request.
@@ -1072,7 +1081,7 @@ interface SyncState {
 }
 let syncState: SyncState = { running: false };
 
-apiRouter.post('/sync', (_req: Request, res: Response) => {
+apiRouter.post('/sync', (req: Request, res: Response) => {
   // In bundle mode the server never contacts the upstream Unity repo —
   // the content is baked at build time and `git lfs pull` on deploy is
   // the only "sync" operation that matters. Reflect that explicitly.
@@ -1087,8 +1096,37 @@ apiRouter.post('/sync', (_req: Request, res: Response) => {
     return;
   }
 
+  // Optional scene scope. When the client is viewing a specific scene
+  // (`/level/<relPath>`), it passes that relPath here so the post-sync
+  // LFS work is narrowed to JUST that scene's dependency graph. The
+  // alternative — the repo-wide `bulkFetchMaterialsAndTextures` pass —
+  // downloads every .mat and image pointer in the clone, which on a
+  // large Unity project runs for several minutes and is the real
+  // source of "why is sync still going after 5 minutes?" complaints
+  // from reviewers who only care about the one map they opened.
+  //
+  // pullSparse is still repo-wide (git has no "pull just one file"),
+  // but that completes in seconds once there's nothing to apply — the
+  // minutes-long tail was always the bulk LFS fetch, not the pull.
+  const body = (req.body ?? {}) as { scenePath?: unknown };
+  const scenePathRaw =
+    typeof body.scenePath === 'string' && body.scenePath.length > 0
+      ? body.scenePath
+      : undefined;
+  let scopedScenePath: string | undefined;
+  if (scenePathRaw) {
+    // Sanitise: same rules as the /api/levels/* handler — relative,
+    // forward-slash, no traversal. Silently drop invalid input and
+    // fall back to full sync rather than rejecting; we'd rather
+    // complete a too-broad sync than no sync at all.
+    const clean = scenePathRaw.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!clean.includes('..') && clean.toLowerCase().endsWith('.unity')) {
+      scopedScenePath = clean;
+    }
+  }
+
   syncState = { running: true, startedAt: Date.now() };
-  res.status(202).json({ ...syncState, queued: true });
+  res.status(202).json({ ...syncState, queued: true, scopedTo: scopedScenePath });
 
   // Fire-and-forget. Any error is captured into syncState so the UI
   // can surface it on the next /api/lfs-status poll; never rethrown
@@ -1097,7 +1135,8 @@ apiRouter.post('/sync', (_req: Request, res: Response) => {
     try {
       const result = await syncUnityRepo({ force: true });
       console.log(
-        `[server] manual sync: ${result.action}${result.head ? ` @ ${result.head}` : ''}`,
+        `[server] manual sync: ${result.action}${result.head ? ` @ ${result.head}` : ''}` +
+          (scopedScenePath ? ` (scope: ${scopedScenePath})` : ' (scope: full)'),
       );
       await assetIndex.build();
       syncState = {
@@ -1114,11 +1153,44 @@ apiRouter.post('/sync', (_req: Request, res: Response) => {
       if (result.changedPaths && result.changedPaths.length > 0) {
         warmChangedPaths(getRepo2LocalDir(), result.changedPaths);
       }
-      // Re-run the bulk `.mat` + image prefetch so any new / changed
-      // pointers introduced by the sync get downloaded in one pass.
-      bulkFetchMaterialsAndTextures(getRepo2LocalDir(), assetIndex).catch((err) => {
-        console.warn('[server] post-sync bulk LFS prefetch error (non-fatal):', err);
-      });
+
+      if (scopedScenePath) {
+        // Scene-scoped post-sync work: materialise the scene YAML itself
+        // (in case it arrived in this pull or was never smudged) and
+        // queue every LFS-tracked asset it references. Everything else
+        // in the repo stays lazy — reviewers explicitly said they'd
+        // rather see a fast, focused "done" than a background queue
+        // churning for 5+ minutes on assets they'll never look at.
+        const repoDir = getRepo2LocalDir();
+        const sceneAbs = path.join(repoDir, scopedScenePath);
+        void (async () => {
+          try {
+            await ensureLfsFile(sceneAbs, repoDir, 30_000);
+            triggerLazyLfsForScene(sceneAbs, repoDir);
+            await ensureSceneYamlPointersReady(sceneAbs, repoDir, 15_000).catch(
+              () => undefined,
+            );
+            console.log(
+              `[server] post-sync scene warm complete: ${scopedScenePath}`,
+            );
+          } catch (err) {
+            console.warn(
+              `[server] post-sync scene warm failed for ${scopedScenePath}:`,
+              err instanceof Error ? err.message : String(err),
+            );
+          }
+        })();
+      } else {
+        // Unscoped: full bulk prefetch so every .mat / image pointer
+        // in the repo lands. Only kicked off when the user is on the
+        // level grid (no specific scene context), where they may be
+        // about to click any tile and we want all of them warm.
+        bulkFetchMaterialsAndTextures(getRepo2LocalDir(), assetIndex).catch(
+          (err) => {
+            console.warn('[server] post-sync bulk LFS prefetch error (non-fatal):', err);
+          },
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn('[server] manual sync failed:', message);

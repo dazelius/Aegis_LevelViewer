@@ -37,3 +37,34 @@ export function scheduleInRepo<T>(task: () => Promise<T>): Promise<T> {
   );
   return result as Promise<T>;
 }
+
+/**
+ * Separate chain for `git lfs fetch` (download-only, no working-tree
+ * writes). LFS fetch writes to `.git/lfs/objects` and `.git/lfs/tmp`
+ * but NEVER touches `.git/index.lock`, so it's safe to run in parallel
+ * with `reset --hard` / `pullSparse` / `lfs checkout` — all of which
+ * do take the index lock and go through `scheduleInRepo`.
+ *
+ * Why this matters: a Git Sync triggers `reset --hard` that rewrites
+ * 10k+ working-tree files on Windows (30–60 s). If scene-open LFS
+ * fetches queue behind that on the same chain, the scene parses with
+ * stale pointers and renders magenta surfaces. Splitting the chains
+ * lets blob downloads start the moment the user clicks a scene, even
+ * if a sync is mid-checkout.
+ *
+ * We still serialise fetches against *each other* so a burst of
+ * per-asset mesh requests doesn't spawn N concurrent `git lfs fetch`
+ * processes racing on `.git/lfs/tmp/<oid>`. The `enqueueLazyFetch`
+ * coalescer upstream already batches paths into a single call; this
+ * chain is belt-and-braces for the remaining cross-batch ordering.
+ */
+let lfsFetchChain: Promise<void> = Promise.resolve();
+
+export function scheduleLfsFetch<T>(task: () => Promise<T>): Promise<T> {
+  const result = lfsFetchChain.then(task, task);
+  lfsFetchChain = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result as Promise<T>;
+}

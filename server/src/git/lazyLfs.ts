@@ -38,7 +38,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { simpleGit } from 'simple-git';
 import { assetIndex } from '../unity/assetIndex.js';
-import { scheduleInRepo } from './repoLock.js';
+import { scheduleInRepo, scheduleLfsFetch } from './repoLock.js';
 
 // ---------------------------------------------------------------------------
 // LFS pointer detection
@@ -290,24 +290,46 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       // `GIT_CONFIG_COUNT` env as "unsafe", and `-c` flags don't
       // reliably propagate into git-lfs's internal smudge/filter
       // subprocesses anyway.
-      const fetchPromise = git.raw([
-        '-c', 'lfs.transfer.maxretries=3',
-        'lfs', 'fetch', '--include', include,
-      ]);
-      await Promise.race([
-        fetchPromise,
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`git lfs fetch wall-clock timeout (${FETCH_TIMEOUT_MS}ms)`)),
-            FETCH_TIMEOUT_MS,
+      // Phase 1 — FETCH (download blobs into .git/lfs/objects).
+      //
+      // Runs on `scheduleLfsFetch`, NOT `scheduleInRepo`. That's
+      // intentional: git-lfs fetch writes to .git/lfs/{objects,tmp}
+      // only — it never touches `.git/index.lock`. So it's safe to
+      // run in parallel with a sync's `reset --hard` / `pullSparse`
+      // that are busy rewriting the working tree. If we had put this
+      // behind `scheduleInRepo`, a user opening a scene during Git
+      // Sync would wait the full reset duration (30–60 s on Windows
+      // for 10 k files) before the blob download even STARTED —
+      // which is exactly the "14 .mat still pointers / magenta"
+      // symptom from the repro.
+      await scheduleLfsFetch(() =>
+        Promise.race([
+          git.raw([
+            '-c', 'lfs.transfer.maxretries=3',
+            'lfs', 'fetch', '--include', include,
+          ]),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`git lfs fetch wall-clock timeout (${FETCH_TIMEOUT_MS}ms)`)),
+              FETCH_TIMEOUT_MS,
+            ),
           ),
-        ),
-      ]);
-      // Smudge pass: materialise cached objects into the working tree.
-      // `git lfs checkout` (no file args) smudges every pointer whose
-      // blob is now in `.git/lfs/objects` — safe to run after each
-      // fetch batch even if some blobs were missing upstream.
-      await git.raw(['lfs', 'checkout']);
+        ]) as Promise<string>,
+      );
+
+      // Phase 2 — SMUDGE (materialise cached objects into the
+      // working tree). `git lfs checkout` writes actual file bytes
+      // and updates git's index — so it DOES compete with `reset
+      // --hard` for `.git/index.lock`. This is the piece that must
+      // serialise through `scheduleInRepo`.
+      //
+      // We pass the explicit batch paths (not a bare `lfs checkout`)
+      // so git-lfs scans only those files instead of walking every
+      // pointer in the 10 k+ file repo. That trims the in-lock time
+      // from a few seconds to milliseconds — which matters because
+      // every millisecond spent holding the index lock is a ms that
+      // a concurrent scene-open can't smudge its own materials.
+      await scheduleInRepo(() => git.raw(['lfs', 'checkout', ...batch]));
       console.log(`[lazyLfs] smudged ${batch.length} file(s)`);
       // Verify: if the first path in the batch is STILL a pointer after
       // smudge, something went wrong upstream — surface that clearly so
@@ -434,7 +456,13 @@ function registerBatch(absPaths: string[], repoDir: string): Promise<void> {
     return inFlight.get(absPaths[0]) ?? Promise.resolve();
   }
 
-  const batchDone = scheduleInRepo(() => doFetchBatch(newPaths, repoDir));
+  // `doFetchBatch` internally schedules its fetch phase on
+  // `scheduleLfsFetch` (no index lock) and its smudge phase on
+  // `scheduleInRepo` (shares the index lock with reset --hard). That
+  // means a scene-open LFS fetch can START downloading blobs while a
+  // concurrent Git Sync is still writing 10k+ working-tree files —
+  // only the final smudge pass has to wait for the sync to finish.
+  const batchDone = doFetchBatch(newPaths, repoDir);
 
   // Register each new path under the shared promise; clean up when done.
   const cleanup = batchDone.finally(() => {
