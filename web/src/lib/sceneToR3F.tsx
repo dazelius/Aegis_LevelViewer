@@ -1246,7 +1246,32 @@ function MultiMeshRendererProxy({
   }
 
   const unitScale = entry.unitScale;
-  const isSingleMesh = entry.allMeshes.length === 1;
+  // Filter out sub-meshes the server asked us to skip. Unity's
+  // `m_RemovedGameObjects` at the scene / outer-prefab level is how a
+  // level author prunes specific children of a nested prefab without
+  // unpacking it (e.g. DesertMine::DM_EV_A drops four decorative cliff
+  // sub-objects so only the tower mesh remains). The server resolves
+  // those fileIDs against the FBX's `.meta` `internalIDToNameTable`
+  // and sends the resulting names in `renderer.removedFbxSubmeshNames`.
+  // Matching is done on the raw FBX-embedded name here (same string
+  // FBXLoader reports as `Object3D.name`) — no fuzzy suffix stripping,
+  // since Unity's remove-list always uses exact fileIDs.
+  const removedNameSet = renderer.removedFbxSubmeshNames && renderer.removedFbxSubmeshNames.length > 0
+    ? new Set(renderer.removedFbxSubmeshNames)
+    : undefined;
+  // Keep the original index alongside the record so we can still
+  // index into `builtMaterials` (which is keyed by the pre-filter
+  // position in `entry.allMeshes`).
+  const visibleMeshes = entry.allMeshes
+    .map((rec, origIdx) => ({ rec, origIdx }))
+    .filter(({ rec }) => !removedNameSet || !removedNameSet.has(rec.meshName));
+  if (removedNameSet && visibleMeshes.length !== entry.allMeshes.length) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[fbx-multi-remove] ${gameObjectName} dropped=${entry.allMeshes.length - visibleMeshes.length}/${entry.allMeshes.length} names=${[...removedNameSet].join(',')}`,
+    );
+  }
+  const isSingleMesh = visibleMeshes.length === 1;
 
   // Mesh list rendered uniformly inside whatever outer wrappers the
   // rotation-override branch picks. Materials / slot-bindings attach to
@@ -1264,21 +1289,25 @@ function MultiMeshRendererProxy({
   // offsets would visibly displace single-mesh props from the scene
   // position authored in Unity. Only when the FBX has genuinely multiple
   // meshes (F_Sample) do we need per-sub-mesh placement.
-  const meshes = entry.allMeshes.map((record, idx) => {
-    const row = builtMaterials[idx];
+  const meshes = visibleMeshes.map(({ rec: record, origIdx }, visibleIdx) => {
+    const row = builtMaterials[origIdx];
     if (!row || row.length === 0) return null;
     const materialProp: THREE.Material | THREE.Material[] =
       row.length === 1 ? row[0] : row;
-    const slotBindings = idx === 0 ? firstRecordBindings : undefined;
+    // Slot-bindings are meant for the FIRST mesh actually rendered (the
+    // one the Inspector can pick). After filtering we anchor them to the
+    // first VISIBLE record so the Inspector keeps working even when the
+    // original `allMeshes[0]` was pruned.
+    const slotBindings = visibleIdx === 0 ? firstRecordBindings : undefined;
     if (isSingleMesh) {
       // No localPosition/localScale wrapper; matches the single-mesh
       // RendererProxy's output structure modulo material-source.
       return (
         <mesh
-          key={`fbx-sub-${idx}`}
+          key={`fbx-sub-${origIdx}`}
           geometry={record.geometry}
           material={materialProp}
-          name={record.meshName || `submesh_${idx}`}
+          name={record.meshName || `submesh_${origIdx}`}
           userData={slotBindings ? { slotBindings } : undefined}
         />
       );
@@ -1286,12 +1315,13 @@ function MultiMeshRendererProxy({
     return (
       <group
         // Records are stable-by-reference across renders (fbxCache
-        // returns the same FbxEntry for a given guid), so index keys
-        // are sufficient.
-        key={`fbx-sub-${idx}`}
+        // returns the same FbxEntry for a given guid), so we key by the
+        // original index to keep React's reconciliation stable across
+        // filter changes.
+        key={`fbx-sub-${origIdx}`}
         position={record.localPosition}
         scale={record.localScale}
-        name={record.meshName || `submesh_${idx}`}
+        name={record.meshName || `submesh_${origIdx}`}
       >
         <mesh
           geometry={record.geometry}

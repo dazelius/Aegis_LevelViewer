@@ -159,6 +159,13 @@ export interface GameObjectNode {
      *  Cleared server-side when an instance-level `m_Mesh` modification
      *  overrides the binding to a specific sub-mesh. */
     renderAllFbxMeshes?: boolean;
+    /** FBX sub-mesh names the server wants the client to skip while
+     *  expanding this renderer's FBX. Populated when the scene /
+     *  outer-prefab `m_RemovedGameObjects` list prunes Unity-hashed
+     *  fileIDs that belong to specific sub-objects inside the FBX
+     *  (resolved via the FBX's `.meta` `internalIDToNameTable`). Only
+     *  consulted when `renderAllFbxMeshes` is true. */
+    removedFbxSubmeshNames?: string[];
   };
   light?: {
     type: 'Directional' | 'Point' | 'Spot' | 'Area' | 'Unknown';

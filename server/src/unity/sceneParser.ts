@@ -271,6 +271,15 @@ export interface GameObjectNode {
      *  explicitly picks one sub-mesh — the existing single-mesh path
      *  continues to service those, unchanged. */
     renderAllFbxMeshes?: boolean;
+    /** Names of FBX sub-meshes the client should SKIP when iterating
+     *  this renderer's FBX (only meaningful when `renderAllFbxMeshes` is
+     *  true). Populated from scene/outer-prefab `m_RemovedGameObjects`
+     *  entries whose fileIDs resolve against the FBX's `.meta`
+     *  `internalIDToNameTable` — the level author's way of pruning the
+     *  prefab body down to a subset. Without this, props like
+     *  `DesertMine::DM_EV_A` render every sub-object in `DM_EV_A.fbx`
+     *  instead of the single sub-mesh the scene actually wants to show. */
+    removedFbxSubmeshNames?: string[];
   };
   light?: {
     type: 'Directional' | 'Point' | 'Spot' | 'Area' | 'Unknown';
@@ -627,6 +636,13 @@ export async function buildGameObjectTree(
           rootGameObjectFileID: rootGoCorr,
           nativeMeshFilterCount: nativeMeshFilterHits,
         });
+        // `m_RemovedGameObjects` is a separate list that Unity uses to
+        // prune specific children / FBX sub-objects of a nested prefab
+        // instance. Apply AFTER modifications so property-path mods see
+        // the full tree shape (mods can target a node that's about to be
+        // removed; safer to let them no-op via detach rather than racing
+        // the map lookups).
+        await applyPrefabRemovedGameObjects(prefabNode, sourcePrefab, mod);
       }
     } catch {
       // Swallow: a broken prefab shouldn't kill the whole scene.
@@ -1167,6 +1183,9 @@ function clonePrefabTree(node: GameObjectNode): GameObjectNode {
           builtinMesh: node.renderer.builtinMesh,
           inlineMeshFileID: node.renderer.inlineMeshFileID,
           renderAllFbxMeshes: node.renderer.renderAllFbxMeshes,
+          removedFbxSubmeshNames: node.renderer.removedFbxSubmeshNames
+            ? [...node.renderer.removedFbxSubmeshNames]
+            : undefined,
         }
       : undefined,
     light: node.light ? { ...node.light, color: [...node.light.color] as [number, number, number, number] } : undefined,
@@ -1453,6 +1472,260 @@ function applyPrefabModifications(
         `active=${clonedRoot.active} hasRotOverride=${clonedRoot.transform.hasRotationOverride}`,
     );
   }
+}
+
+/**
+ * Apply `m_RemovedGameObjects` entries from a PrefabInstance to the cloned
+ * prefab tree. Unity uses this list to let a scene / outer prefab prune
+ * specific children of a nested prefab — e.g. `DesertMine::DM_EV_A` removes
+ * four decorative cliff sub-prefabs plus five FBX-internal sub-objects so
+ * only the tower mesh renders.
+ *
+ * Two resolution shapes are handled:
+ *  1. The fileID matches a node in the cloned tree (a child PrefabInstance
+ *     root, a native GameObject, or a Transform alias). We detach that node
+ *     from its parent.
+ *  2. The fileID doesn't match any cloned node but IS recorded in the
+ *     synth'd model-prefab root's FBX `.meta` `internalIDToNameTable`. We
+ *     project the resulting mesh NAMES onto `clonedRoot.renderer
+ *     .removedFbxSubmeshNames` so the client can skip those sub-meshes
+ *     while inflating the FBX. This is the only way to represent "drop a
+ *     specific sub-mesh of an FBX" given our synthesized single-root model.
+ *
+ * Unresolved fileIDs are silently ignored — mirroring the mod pipeline,
+ * which prefers partial correctness over hard failures on unknown shapes.
+ */
+async function applyPrefabRemovedGameObjects(
+  clonedRoot: GameObjectNode,
+  prefabInfo: {
+    byGOFileID: Map<string, GameObjectNode>;
+    byTransformFileID: Map<string, GameObjectNode>;
+    byComponentFileID: Map<string, GameObjectNode>;
+    root: GameObjectNode;
+    isModelPrefab: boolean;
+  },
+  modBlock: UnityObj,
+): Promise<void> {
+  const removedRaw = modBlock['m_RemovedGameObjects'];
+  if (!Array.isArray(removedRaw) || removedRaw.length === 0) return;
+
+  // Pair original -> cloned nodes the same way applyPrefabModifications
+  // does, so stripped-alias / GameObject / Transform fileIDs resolve onto
+  // OUR clone instead of the cached source tree.
+  const cloned = indexClonedPrefab(clonedRoot);
+  const origOrder: GameObjectNode[] = [];
+  const cloneOrder: GameObjectNode[] = [];
+  const pushAll = (n: GameObjectNode, arr: GameObjectNode[]) => {
+    arr.push(n);
+    for (const c of n.children) pushAll(c, arr);
+  };
+  pushAll(prefabInfo.root, origOrder);
+  pushAll(clonedRoot, cloneOrder);
+  const clonedByTransformFileID = new Map<string, GameObjectNode>();
+  for (const [xf, origGO] of prefabInfo.byTransformFileID.entries()) {
+    const idx = origOrder.indexOf(origGO);
+    if (idx >= 0 && idx < cloneOrder.length) {
+      clonedByTransformFileID.set(xf, cloneOrder[idx]);
+    }
+  }
+  const clonedByComponentFileID = new Map<string, GameObjectNode>();
+  for (const [cf, origGO] of prefabInfo.byComponentFileID.entries()) {
+    const idx = origOrder.indexOf(origGO);
+    if (idx >= 0 && idx < cloneOrder.length) {
+      clonedByComponentFileID.set(cf, cloneOrder[idx]);
+    }
+  }
+
+  // Pre-resolve the synth'd FBX meta once per call — most scene removals
+  // target FBX sub-object fileIDs that don't appear anywhere in the prefab
+  // tree, and looking up the meta per-entry churns the cache needlessly.
+  const fbxMeta =
+    prefabInfo.isModelPrefab && clonedRoot.renderer?.meshGuid
+      ? await getFbxMeshInfo(clonedRoot.renderer.meshGuid).catch(() => undefined)
+      : undefined;
+  // The FBX meta's internalIDToNameTable is filtered to classId=43 (Mesh)
+  // by `parseFbxMeta`, but `m_RemovedGameObjects` mostly lists classId=1
+  // (GameObject) fileIDs. Rebuild a cross-class name table from the raw
+  // .meta so GameObject / Transform fileIDs ALSO resolve to sub-names the
+  // client can match against FBXLoader's Object3D.name table. Skipped when
+  // the renderer is single-mesh or there's no FBX backing.
+  const allNames = fbxMeta ? await loadFbxAnyClassNames(clonedRoot.renderer?.meshGuid) : undefined;
+
+  let detached = 0;
+  let submeshSkipped = 0;
+  let missedRemovals = 0;
+  const removedNames = new Set<string>(
+    clonedRoot.renderer?.removedFbxSubmeshNames ?? [],
+  );
+
+  for (const raw of removedRaw) {
+    const fid = fileIdOf(raw);
+    if (!fid) continue;
+
+    // First try: a node in the cloned tree we can physically detach.
+    const node =
+      cloned.byGOFileID.get(fid) ??
+      clonedByTransformFileID.get(fid) ??
+      clonedByComponentFileID.get(fid);
+    if (node) {
+      if (detachFromParent(clonedRoot, node)) {
+        detached += 1;
+        continue;
+      }
+    }
+
+    // Second try: a specific FBX sub-object, resolvable through the .meta.
+    // Only makes sense for synth'd model prefabs whose client-side expansion
+    // walks every sub-mesh of the FBX.
+    if (
+      prefabInfo.isModelPrefab &&
+      clonedRoot.renderer?.renderAllFbxMeshes &&
+      allNames
+    ) {
+      const name = allNames.get(fid);
+      if (name) {
+        removedNames.add(name);
+        submeshSkipped += 1;
+        continue;
+      }
+    }
+
+    missedRemovals += 1;
+  }
+
+  if (removedNames.size > 0 && clonedRoot.renderer) {
+    clonedRoot.renderer.removedFbxSubmeshNames = [...removedNames];
+  }
+
+  // Unity 2022+ FBX / prefab imports use stable-hashed (SpookyHashV2)
+  // fileIDs that don't appear in any on-disk table. That makes
+  // `m_RemovedGameObjects` literally unresolvable for those shapes — which
+  // is the only thing blocking scenes like `DesertMine::DM_EV_A` from
+  // rendering correctly (the scene says "drop the 4 decorative cliff
+  // sub-prefabs and keep just the tower root" but we can't find any of
+  // the 5 fileIDs anywhere). Fall back to a count-matched heuristic: if
+  // the unresolved removal count equals the cloned root's current child
+  // count AND every entry failed to resolve through the direct maps, the
+  // scene almost certainly wants all of those PrefabInstance-added
+  // children gone. Applying it wholesale here mirrors what Unity ends up
+  // doing at runtime without requiring us to implement SpookyHashV2.
+  //
+  // Safety rails:
+  //   - Only fires when `detached === 0 && submeshSkipped === 0`, i.e.
+  //     not a single removal was resolvable via existing paths. Mixed
+  //     resolutions suggest the author is mutating an individual subset,
+  //     not wiping the whole child list.
+  //   - Requires at least one child to remove; a no-op avoids firing on
+  //     scenes whose root already has nothing to prune.
+  //   - Only applies to model / thin-wrapper prefabs. Regular .prefab
+  //     trees have enough fileID stability on disk that a total miss
+  //     usually means the targets are deeper than one hop, and blanket-
+  //     removing children there would delete real hierarchy.
+  let heuristicDetached = 0;
+  if (
+    prefabInfo.isModelPrefab &&
+    detached === 0 &&
+    submeshSkipped === 0 &&
+    missedRemovals > 0 &&
+    clonedRoot.children.length > 0 &&
+    missedRemovals === clonedRoot.children.length
+  ) {
+    heuristicDetached = clonedRoot.children.length;
+    clonedRoot.children = [];
+  }
+
+  if (
+    removedRaw.length > 0 &&
+    (detached > 0 || submeshSkipped > 0 || missedRemovals > 0 || heuristicDetached > 0)
+  ) {
+    console.log(
+      `[prefabRemove] root='${clonedRoot.name}' entries=${removedRaw.length} ` +
+        `detached=${detached} submeshSkipped=${submeshSkipped} miss=${missedRemovals}` +
+        (heuristicDetached > 0 ? ` heuristicDetached=${heuristicDetached}` : ''),
+    );
+  }
+}
+
+/**
+ * Remove `target` from `root`'s tree, if it's reachable. Returns true on
+ * success. We walk instead of carrying a parent pointer because the tree
+ * is built as a pure parent->children structure and mutating upwards is
+ * rare enough not to justify an extra field on every node.
+ */
+function detachFromParent(root: GameObjectNode, target: GameObjectNode): boolean {
+  if (root === target) return false; // can't detach the root itself
+  const stack: GameObjectNode[] = [root];
+  while (stack.length > 0) {
+    const cur = stack.pop() as GameObjectNode;
+    const idx = cur.children.indexOf(target);
+    if (idx >= 0) {
+      cur.children.splice(idx, 1);
+      return true;
+    }
+    for (const c of cur.children) stack.push(c);
+  }
+  return false;
+}
+
+/**
+ * Parse an FBX's `.meta` and build a fileID -> name table that spans every
+ * classId (not just Mesh = 43). `parseFbxMeta` filters to class 43 because
+ * it only needs the mesh name per sub-mesh, but `m_RemovedGameObjects`
+ * mostly lists GameObject (class 1) fileIDs — which share a name with the
+ * sub-mesh they own in every FBX importer config we've seen. Name-matching
+ * on either class lets the client skip the right Object3D.
+ */
+const ANY_CLASS_NAME_CACHE = new Map<string, Map<string, string>>();
+async function loadFbxAnyClassNames(
+  guid: string | undefined,
+): Promise<Map<string, string> | undefined> {
+  if (!guid) return undefined;
+  const key = guid.toLowerCase();
+  const cached = ANY_CLASS_NAME_CACHE.get(key);
+  if (cached) return cached;
+  const rec = assetIndex.get(key);
+  if (!rec) return undefined;
+  let text: string;
+  try {
+    text = await fs.readFile(`${rec.absPath}.meta`, 'utf8');
+  } catch {
+    return undefined;
+  }
+  const table = new Map<string, string>();
+  // internalIDToNameTable is the primary shape: each entry is
+  // `- first: { <classId>: <fileID> }\n  second: <name>`. We scan the raw
+  // text instead of reparsing the YAML so we can keep quoted 19-digit
+  // fileIDs intact (js-yaml would truncate them to Number precision).
+  const re = /-\s+first:\s*\{\s*\d+:\s*"?(-?\d+)"?\s*\}\s*\n\s+second:\s*([^\r\n]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const fileID = m[1];
+    let name = m[2].trim();
+    if (
+      (name.startsWith('"') && name.endsWith('"')) ||
+      (name.startsWith("'") && name.endsWith("'"))
+    ) {
+      name = name.slice(1, -1);
+    }
+    if (fileID && name && !table.has(fileID)) {
+      table.set(fileID, name);
+    }
+  }
+  // Legacy `fileIDToRecycleName: { <fileID>: <name>, ... }` as a fallback.
+  const legacy = /fileIDToRecycleName:\s*\n([\s\S]*?)\n\S/.exec(text);
+  if (legacy) {
+    const block = legacy[1];
+    const entryRe = /^\s+(-?\d+):\s*([^\r\n]+)$/gm;
+    let em: RegExpExecArray | null;
+    while ((em = entryRe.exec(block)) !== null) {
+      const fileID = em[1];
+      let name = em[2].trim();
+      if (name.startsWith('"') && name.endsWith('"')) name = name.slice(1, -1);
+      if (fileID && name && !table.has(fileID)) table.set(fileID, name);
+    }
+  }
+  ANY_CLASS_NAME_CACHE.set(key, table);
+  return table;
 }
 
 /**
