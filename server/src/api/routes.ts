@@ -45,7 +45,11 @@ import { assetIndex } from '../unity/assetIndex.js';
 import { getFbxMeshInfo } from '../unity/metaParser.js';
 import { parseMaterialByGuid } from '../unity/materialParser.js';
 import { syncUnityRepo } from '../git/gitSync.js';
-import { triggerLazyLfsForScene, ensureLfsFile, isLfsPointerBuf } from '../git/lazyLfs.js';
+import {
+  triggerLazyLfsForScene,
+  triggerLfsFetch,
+  isLfsPointerBuf,
+} from '../git/lazyLfs.js';
 import { bundleMode, config, getAssetsDir, getRepo2LocalDir } from '../config.js';
 import { bundleIndex, isBundleLfsPointer } from '../bundle/bundleIndex.js';
 import {
@@ -191,31 +195,26 @@ apiRouter.get('/levels/*', async (req: Request, res: Response) => {
     return;
   }
 
-  // If the scene file itself is still a Git LFS pointer (typical on a
-  // freshly-cloned platform deploy where the bulk LFS fetch was
-  // skipped), materialise it on demand before parsing. parseScene on a
-  // 130-byte pointer produces an empty tree; this ensures the parser
-  // sees the real YAML bytes.
+  // If the scene file itself is still a Git LFS pointer, DO NOT await
+  // the fetch here. The platform reverse-proxy typically kills the
+  // upstream request at ~30 s (resulting in a 502 for the client), but
+  // a single LFS download can legitimately take longer on a cold
+  // cache. Instead we kick off the fetch in the background and return
+  // 409 immediately — the client retries with backoff and the second
+  // request hits the now-materialised file.
   const repoDir = getRepo2LocalDir();
   try {
     const head = await fs.readFile(absPath);
     if (isLfsPointerBuf(head)) {
-      console.log(`[lazyLfs] scene file is a pointer — fetching ${relPath} before parse`);
-      await ensureLfsFile(absPath, repoDir);
-      // Re-check AFTER the fetch. If still a pointer, the LFS server
-      // never delivered the blob (auth / network / missing upstream).
-      // Return an actionable error instead of parsing zero GameObjects
-      // and painting a black screen.
-      const headAfter = await fs.readFile(absPath).catch(() => null);
-      if (headAfter && isLfsPointerBuf(headAfter)) {
-        console.warn(
-          `[lazyLfs] scene still a pointer after fetch — LFS unavailable for ${relPath}`,
+      const inFlight = triggerLfsFetch(absPath, repoDir);
+      if (inFlight) {
+        console.log(
+          `[lazyLfs] scene ${relPath} is a pointer — ` +
+            `returning 409 while background fetch runs`,
         );
-        res.status(503).json({
-          error: 'scene content not available',
-          detail:
-            'This scene is stored in Git LFS and the server could not download it from the LFS endpoint. ' +
-            'Check the platform logs for `[lazyLfs] batch failed` and `git lfs env` output to diagnose.',
+        res.status(409).json({
+          error: 'lfs-pointer',
+          hint: 'Scene file is being downloaded from Git LFS — retry shortly.',
           relPath,
         });
         return;
@@ -355,16 +354,18 @@ apiRouter.get('/assets/texture', async (req: Request, res: Response) => {
     // gracefully to flat-colour without crashing the loader.
     if (isLfsPointerBuf(buf)) {
       if (!bundleMode) {
-        await ensureLfsFile(rec.absPath, getRepo2LocalDir());
-        buf = await fs.readFile(rec.absPath).catch(() => buf);
+        // Fire-and-forget: register the file for background fetch but
+        // do NOT await it here. Platform reverse-proxies often time
+        // out at ~30 s and git-lfs fetches can exceed that on a cold
+        // cache. Serve a placeholder now; the client refetches on
+        // the next render once the blob lands.
+        triggerLfsFetch(rec.absPath, getRepo2LocalDir());
       }
-      if (isLfsPointerBuf(buf)) {
-        res.setHeader('Content-Type', 'image/png');
-        res.setHeader('X-Lfs-Placeholder', '1');
-        res.setHeader('Cache-Control', 'public, max-age=60');
-        res.end(PLACEHOLDER_PNG);
-        return;
-      }
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('X-Lfs-Placeholder', '1');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(PLACEHOLDER_PNG);
+      return;
     }
     // sharp/libvips does not support TGA, so we pre-decode TGA files to raw
     // RGBA pixels via lunapaint's codec, then hand the raw buffer to sharp
@@ -553,20 +554,18 @@ apiRouter.get('/assets/mesh', async (req: Request, res: Response) => {
     let buf = await fs.readFile(rec.absPath);
     if (isLfsPointerBuf(buf)) {
       if (!bundleMode) {
-        // Await the in-flight scene pre-fetch (or start a dedicated one).
-        await ensureLfsFile(rec.absPath, getRepo2LocalDir());
-        buf = await fs.readFile(rec.absPath).catch(() => buf);
+        // Fire-and-forget: see texture handler above. A blocking
+        // await here can blow the platform's ~30 s proxy timeout
+        // and surface as 502 to the user. Return 409 immediately;
+        // the client retries with backoff.
+        triggerLfsFetch(rec.absPath, getRepo2LocalDir());
       }
-      if (isLfsPointerBuf(buf)) {
-        // Still a pointer after wait/timeout — tell the client explicitly
-        // so it renders a placeholder box instead of crashing the loader.
-        res.status(409).json({
-          error: 'lfs-pointer',
-          hint: 'LFS fetch in progress or upstream blob missing — retry shortly',
-          relPath: rec.relPath,
-        });
-        return;
-      }
+      res.status(409).json({
+        error: 'lfs-pointer',
+        hint: 'LFS fetch in progress or upstream blob missing — retry shortly',
+        relPath: rec.relPath,
+      });
+      return;
     }
     const contentType =
       ext === '.fbx'

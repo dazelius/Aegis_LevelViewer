@@ -253,7 +253,33 @@ export async function fetchScene(relPath: string): Promise<SceneJson | UnityExpo
   // relPath can contain slashes; each segment must be encoded individually so
   // express sees `/api/levels/<relPath>` correctly.
   const encoded = relPath.split('/').map(encodeURIComponent).join('/');
-  return apiGet<SceneJson | UnityExport>(`/api/levels/${encoded}`);
+  const url = apiUrl(`/api/levels/${encoded}`);
+
+  // Retry on 409 `lfs-pointer`. The server returns 409 immediately when
+  // the scene `.unity` is still a Git LFS pointer and a background fetch
+  // is in flight; polling gives it time to land on disk without blowing
+  // the platform's reverse-proxy timeout (~30 s) that would otherwise
+  // surface as a 502 to the user.
+  const MAX_ATTEMPTS = 12;
+  const RETRY_DELAY_MS = 2500;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const res = await fetch(url);
+    if (res.status !== 409) {
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`${res.status} ${res.statusText}: ${text}`);
+      }
+      return (await res.json()) as SceneJson | UnityExport;
+    }
+    if (attempt === MAX_ATTEMPTS - 1) {
+      const text = await res.text().catch(() => '');
+      throw new Error(
+        `Scene still not available after ${MAX_ATTEMPTS} attempts (LFS fetch did not complete): ${text}`,
+      );
+    }
+    await new Promise<void>((r) => setTimeout(r, RETRY_DELAY_MS));
+  }
+  throw new Error('unreachable');
 }
 
 // ===========================================================================

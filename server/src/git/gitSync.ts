@@ -4,6 +4,7 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import {
   config,
   getAuthenticatedRepoUrl,
+  getGitConfigEnv,
   getRepo2LocalDir,
   getSparsePaths,
 } from '../config.js';
@@ -86,6 +87,7 @@ async function cloneSparse(targetDir: string): Promise<void> {
   // clearly visible through our outputHandler below.
   const git = simpleGit(parent).env({
     ...lfsEnv,
+    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
   attachGitStreamLogger(git);
@@ -107,6 +109,7 @@ async function cloneSparse(targetDir: string): Promise<void> {
   // Make the long-paths setting persistent on the local clone.
   const inner: SimpleGit = simpleGit(targetDir).env({
     ...lfsEnv,
+    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
   attachGitStreamLogger(inner);
@@ -213,6 +216,7 @@ async function fetchLfsAssets(targetDir: string): Promise<void> {
   }
 
   const lfsGit = simpleGit(targetDir).env({
+    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
   attachGitStreamLogger(lfsGit);
@@ -282,6 +286,7 @@ async function fetchLfsAssets(targetDir: string): Promise<void> {
 async function pullSparse(targetDir: string): Promise<void> {
   const lfsEnv = {
     GIT_LFS_SKIP_SMUDGE: '1',
+    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>;
   const inner = simpleGit(targetDir).env(lfsEnv);

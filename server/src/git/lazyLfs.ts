@@ -38,6 +38,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { simpleGit } from 'simple-git';
 import { assetIndex } from '../unity/assetIndex.js';
+import { getGitConfigEnv, getGitUrlRewriteFlags } from '../config.js';
 
 // ---------------------------------------------------------------------------
 // LFS pointer detection
@@ -181,6 +182,7 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
   if (relPaths.length === 0) return;
 
   const git = simpleGit(repoDir).env({
+    ...getGitConfigEnv(),
     GIT_TERMINAL_PROMPT: '0',
   } as Record<string, string>);
 
@@ -206,7 +208,14 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       // somehow wedges despite its own activitytimeout, we reject the
       // chain so subsequent requests don't queue behind a dead fetch.
       const FETCH_TIMEOUT_MS = 90_000;
+      // URL-rewrite flags (`-c url.X.insteadOf=Y`) MUST precede the
+      // subcommand so they apply to LFS's transport too. See config.ts
+      // for the operational reason — our GitLab LFS batch API hands out
+      // an unreachable external IP in `actions.download.href` and this
+      // rewrite patches it back to the internal IP that is actually
+      // reachable from the deploy host.
       const fetchPromise = git.raw([
+        ...getGitUrlRewriteFlags(),
         '-c', 'lfs.transfer.maxretries=1',
         'lfs', 'fetch', '--include', include,
       ]);
@@ -318,6 +327,25 @@ export function triggerLazyLfsForScene(sceneAbsPath: string, repoDir: string): v
       `queuing ${pointerPaths.length} LFS pointer(s) for background fetch`,
   );
   registerBatch(pointerPaths, repoDir); // intentionally not awaited
+}
+
+/**
+ * Fire-and-forget variant of `ensureLfsFile`. Guarantees that a single
+ * file is registered for LFS fetch (joining an existing in-flight batch
+ * or starting a new one), but returns immediately without awaiting the
+ * fetch itself. Use this from HTTP handlers that must respond inside
+ * the reverse-proxy's timeout (typically 30 s): the handler returns a
+ * 409 "lfs-pointer, retry shortly" hint and the client polls.
+ *
+ * Returns `true` if the caller should treat the file as in-flight (was
+ * or is now being fetched), `false` if the file is already a real blob
+ * on disk (no work needed).
+ */
+export function triggerLfsFetch(absPath: string, repoDir: string): boolean {
+  if (inFlight.has(absPath)) return true;
+  if (!isLfsPointerSync(absPath)) return false;
+  registerBatch([absPath], repoDir);
+  return true;
 }
 
 /**

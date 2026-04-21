@@ -152,7 +152,144 @@ export const config = {
   // Used to build the `Content-Security-Policy: frame-ancestors` header.
   // Empty string = only same-origin framing (`'self'`) is allowed.
   iframeOrigins: envOptional('AEGISGRAM_IFRAME_ORIGINS', ''),
+
+  // Rewrite outbound Git/LFS URLs before git reaches the network.
+  // Whitespace-separated pairs of <from> <to> (also accepts `,`/`;` as
+  // separators). Each pair becomes `url.<to>.insteadOf=<from>`, applied
+  // to every git invocation the server controls (clone/pull/lfs fetch)
+  // and inherited by git-lfs's smudge subprocesses.
+  //
+  // Why this exists: our GitLab instance answers the LFS batch API on
+  // the internal IP (172.31.2.91) but populates `actions.download.href`
+  // with the server's `external_url` (13.209.114.157), which the deploy
+  // host can't reach — LFS downloads hang then fail. One env var
+  // rewrites that redirect back to the reachable internal IP without
+  // needing GitLab admin to change external_url, /etc/hosts edits, or
+  // a side-proxy.
+  //
+  // Whitespace form (RECOMMENDED — most deploy UIs reject `=` inside
+  // env values):
+  //   AEGISGRAM_GIT_URL_REWRITES="http://13.209.114.157/ http://172.31.2.91/"
+  //
+  // Multiple rewrites = keep listing pairs:
+  //   AEGISGRAM_GIT_URL_REWRITES="http://A/ http://B/  http://C/ http://D/"
+  //
+  // Legacy `from=to,from=to` is still parsed when any token contains `=`.
+  //
+  // Base64 escape hatch (for platforms that sanitise env values that
+  // contain public IPs — e.g. UAAutoTool silently replaces the
+  // external LFS IP with the internal one, collapsing the rewrite
+  // into a no-op). Prefix the value with `base64:` or `b64:`:
+  //   AEGISGRAM_GIT_URL_REWRITES=base64:<base64 of "http://A/ http://B/">
+  gitUrlRewrites: envOptional('AEGISGRAM_GIT_URL_REWRITES', ''),
 };
+
+/**
+ * Parse `AEGISGRAM_GIT_URL_REWRITES` into { from, to } pairs.
+ *
+ * Accepted formats (pick whichever survives your platform's env-var UI):
+ *   1. Whitespace-separated, even-count tokens (recommended):
+ *        "http://external/ http://internal/  http://A/ http://B/"
+ *      Each pair is `<from> <to>`. Commas and semicolons also act as
+ *      separators, so this is lenient on copy-paste.
+ *   2. Legacy `<from>=<to>[,<from>=<to>]` style is still accepted when
+ *      the entry contains `=` — but many deploy platforms treat `=`
+ *      inside a value as illegal, which is why the whitespace form
+ *      exists. Avoid `=` if you can.
+ */
+function parseGitUrlRewrites(): Array<{ from: string; to: string }> {
+  let raw = config.gitUrlRewrites.trim();
+  if (!raw) return [];
+
+  // Escape hatch for deploy platforms that aggressively rewrite env
+  // values containing public IPs / hostnames (UAAutoTool silently
+  // replaces 13.209.114.157 with 172.31.2.91 on save, which zeroes
+  // out the rewrite — both sides of each pair become identical).
+  // Base64-encoding the pair list hides the literal IP string from
+  // whatever scanner the platform runs. Accepted prefixes:
+  //   base64:<payload>
+  //   b64:<payload>
+  const b64Match = /^(?:base64|b64):(.*)$/is.exec(raw);
+  if (b64Match) {
+    try {
+      raw = Buffer.from(b64Match[1].trim(), 'base64').toString('utf8').trim();
+      console.log('[config] AEGISGRAM_GIT_URL_REWRITES: base64 payload decoded');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[config] AEGISGRAM_GIT_URL_REWRITES base64 decode failed: ${msg}`);
+      return [];
+    }
+  }
+
+  const out: Array<{ from: string; to: string }> = [];
+
+  // Split on any mix of whitespace / commas / semicolons.
+  const tokens = raw.split(/[\s,;]+/).map((t) => t.trim()).filter(Boolean);
+
+  // If ANY token contains '=', fall back to the legacy `from=to` parser
+  // so existing deploys that use that shape keep working unchanged.
+  if (tokens.some((t) => t.includes('='))) {
+    for (const pair of tokens) {
+      const eq = pair.indexOf('=');
+      if (eq <= 0 || eq === pair.length - 1) {
+        console.warn(`[config] ignoring malformed url-rewrite: ${pair}`);
+        continue;
+      }
+      const from = pair.slice(0, eq).trim();
+      const to = pair.slice(eq + 1).trim();
+      if (from && to) out.push({ from, to });
+    }
+    return out;
+  }
+
+  // Whitespace form: expect even number of tokens consumed as pairs.
+  if (tokens.length % 2 !== 0) {
+    console.warn(
+      `[config] AEGISGRAM_GIT_URL_REWRITES has ${tokens.length} token(s) — ` +
+        `expected an even count (pairs of <from> <to>). Ignoring trailing token.`,
+    );
+  }
+  for (let i = 0; i + 1 < tokens.length; i += 2) {
+    const from = tokens[i];
+    const to = tokens[i + 1];
+    if (from && to) out.push({ from, to });
+  }
+  return out;
+}
+
+/**
+ * Parse `AEGISGRAM_GIT_URL_REWRITES` into a list of `-c
+ * url.<to>.insteadOf=<from>` flags suitable for prepending to any `git`
+ * command. Returns [] when unset so callers can splat unconditionally.
+ */
+export function getGitUrlRewriteFlags(): string[] {
+  const flags: string[] = [];
+  for (const { from, to } of parseGitUrlRewrites()) {
+    flags.push('-c', `url.${to}.insteadOf=${from}`);
+  }
+  return flags;
+}
+
+/**
+ * Return env-var overlay that applies the same URL rewrites to EVERY
+ * git subprocess (including ones we don't wrap with `-c`, like the
+ * smudge filter git-lfs runs internally). Uses `GIT_CONFIG_COUNT` /
+ * `GIT_CONFIG_KEY_N` / `GIT_CONFIG_VALUE_N` — git's native mechanism
+ * for injecting config without quoting hazards. Callers merge this
+ * into their simpleGit `.env({...})` call.
+ */
+export function getGitConfigEnv(): Record<string, string> {
+  const rewrites = parseGitUrlRewrites();
+  if (rewrites.length === 0) return {};
+  const env: Record<string, string> = {
+    GIT_CONFIG_COUNT: String(rewrites.length),
+  };
+  rewrites.forEach(({ from, to }, i) => {
+    env[`GIT_CONFIG_KEY_${i}`] = `url.${to}.insteadOf`;
+    env[`GIT_CONFIG_VALUE_${i}`] = from;
+  });
+  return env;
+}
 
 /**
  * True iff a pre-baked content bundle exists on disk. Computed once at
