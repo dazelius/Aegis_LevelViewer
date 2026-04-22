@@ -52,6 +52,7 @@ import {
   ensureSceneYamlPointersReady,
   bulkFetchMaterialsAndTextures,
   getBulkPrefetchProgress,
+  getLfsHealth,
   isLfsPointerBuf,
   warmChangedPaths,
 } from '../git/lazyLfs.js';
@@ -1218,15 +1219,27 @@ apiRouter.get('/lfs-status', (_req: Request, res: Response) => {
     // In bundle mode no LFS fetch ever runs from the server; clients
     // that care about this endpoint are always live-mode clients, but
     // we still return a well-formed stub so the UI code path is
-    // uniform.
+    // uniform. We still surface `health` so an ops dashboard can
+    // distinguish "bundle mode, nothing to report" from "live mode,
+    // everything broken".
     res.json({
       running: false,
       total: 0,
       done: 0,
       filesDone: 0,
       sync: { running: false },
+      mode: 'bundle',
+      health: getLfsHealth(),
     });
     return;
   }
-  res.json({ ...getBulkPrefetchProgress(), sync: syncState });
+  // Include per-process LFS runtime health so operators and the in-page
+  // diagnostic panel can tell `git-lfs` installation/credential issues
+  // from slow-but-working fetches without shell access to the host.
+  res.json({
+    ...getBulkPrefetchProgress(),
+    sync: syncState,
+    mode: 'live',
+    health: getLfsHealth(),
+  });
 });

@@ -26,7 +26,12 @@ import {
   SelectionProvider,
   type SceneSelection,
 } from '../lib/sceneToR3F';
-import { subscribeFbxCacheStats, type FbxCacheStats } from '../lib/fbxCache';
+import {
+  subscribeFbxCacheStats,
+  getFbxFailures,
+  type FbxCacheStats,
+  type FbxFailure,
+} from '../lib/fbxCache';
 import {
   UnityExportRoots,
   UnityRenderSettingsApply,
@@ -311,6 +316,13 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
   // physics-hull debugging — useful when a prop clearly has the wrong
   // collision shape relative to its visual mesh.
   const [showColliders, setShowColliders] = useState(false);
+
+  // HUD panel that lists the specific FBX GUIDs currently in a terminal
+  // failure state. Gated behind a click on the "N failed" badge because
+  // 99% of sessions have failed=0 — no reason to always render a panel.
+  // When shown we also refresh the snapshot on each stats publish so the
+  // list doesn't go stale as more retries settle.
+  const [showFbxFailures, setShowFbxFailures] = useState(false);
 
   // Diagnostic: swap every mesh's textured material for a flat per-slot
   // color so the user can see at a glance which geometry references which
@@ -802,10 +814,32 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
         </div>
         <div className="muted">
           FBX assets: <b>{fbx.ready}</b> ready &middot; <b>{fbx.pending}</b> loading &middot;{' '}
-          <b style={{ color: fbx.failed > 0 ? '#e67e7e' : undefined }}>{fbx.failed}</b> failed
+          {fbx.failed > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowFbxFailures((v) => !v)}
+              title="Show the specific GUIDs and failure reasons. Use this to tell whether you're looking at a server LFS issue (lfs-pointer dominant), a missing-asset indexing bug (missing/HTTP 404), or a parse regression (error)."
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                color: '#e67e7e',
+                cursor: 'pointer',
+                font: 'inherit',
+                textDecoration: 'underline dotted',
+              }}
+            >
+              <b>{fbx.failed}</b> failed
+            </button>
+          ) : (
+            <>
+              <b>{fbx.failed}</b> failed
+            </>
+          )}
           {' / '}
           {fbx.requested} requested
         </div>
+        {showFbxFailures && fbx.failed > 0 && <FbxFailurePanel stats={fbx} />}
         <div className="muted">
           Bounds center: [{framing.center[0].toFixed(1)}, {framing.center[1].toFixed(1)},{' '}
           {framing.center[2].toFixed(1)}] &middot; radius: {framing.radius.toFixed(1)}
@@ -1962,6 +1996,105 @@ function useFbxCacheStats(): FbxCacheStats {
   }));
   useEffect(() => subscribeFbxCacheStats(setStats), []);
   return stats;
+}
+
+/**
+ * HUD sub-panel that shows the per-GUID failure list when the user clicks the
+ * "N failed" badge. Diagnoses the common "some meshes are missing on deploy"
+ * triage question: was it LFS (server host didn't run `git lfs pull`), a
+ * missing asset index entry, a network error, or a parse exception?
+ *
+ * The panel re-pulls `getFbxFailures()` whenever the aggregate stats change,
+ * which happens synchronously on every settle. We don't keep the failures in
+ * React state directly because (a) the list is often <10 entries and
+ * reproducing it from the map is O(n), and (b) we want the HUD reactive to
+ * both new failures landing AND existing ones being cleared by the
+ * lfs-cooldown retry path in `loadFbx`.
+ */
+function FbxFailurePanel({ stats }: { stats: FbxCacheStats }): JSX.Element {
+  const [failures, setFailures] = useState<FbxFailure[]>(() => getFbxFailures());
+  useEffect(() => {
+    setFailures(getFbxFailures());
+  }, [stats.failed, stats.ready, stats.requested]);
+
+  const byStatus: Record<string, number> = {};
+  for (const f of failures) byStatus[f.status] = (byStatus[f.status] ?? 0) + 1;
+  const breakdown = Object.entries(byStatus)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${v}× ${k}`)
+    .join(', ');
+  const DOMINANT_LFS_RATIO = 0.5;
+  const showLfsHint =
+    failures.length > 0 && (byStatus['lfs-pointer'] ?? 0) / failures.length > DOMINANT_LFS_RATIO;
+
+  return (
+    <div
+      className="muted"
+      style={{
+        background: 'rgba(0,0,0,0.35)',
+        border: '1px solid rgba(230,126,126,0.4)',
+        borderRadius: 4,
+        padding: '6px 8px',
+        marginTop: 4,
+        maxHeight: 220,
+        overflow: 'auto',
+        fontFamily:
+          'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+        fontSize: 11,
+      }}
+    >
+      <div style={{ marginBottom: 4 }}>
+        Failure breakdown: <b>{breakdown}</b>
+        {showLfsHint && (
+          <div style={{ color: '#ffcf73', marginTop: 2 }}>
+            Most failures are LFS-pointer timeouts. This usually means the server host could not
+            materialise Git LFS blobs in time. Check <code>/api/lfs-status</code>; on deploy
+            verify <code>git-lfs</code> is installed and LFS credentials are configured.
+          </div>
+        )}
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ textAlign: 'left', opacity: 0.7 }}>
+            <th style={{ padding: '2px 6px' }}>guid</th>
+            <th style={{ padding: '2px 6px' }}>status</th>
+            <th style={{ padding: '2px 6px' }}>attempts</th>
+            <th style={{ padding: '2px 6px' }}>reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {failures.map((f) => (
+            <tr key={f.guid} style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <td style={{ padding: '2px 6px' }} title={f.guid}>
+                {f.guid.slice(0, 8)}
+              </td>
+              <td
+                style={{
+                  padding: '2px 6px',
+                  color: f.status === 'lfs-pointer' ? '#ffcf73' : '#e67e7e',
+                }}
+              >
+                {f.status}
+              </td>
+              <td style={{ padding: '2px 6px' }}>{f.attempts}</td>
+              <td
+                style={{
+                  padding: '2px 6px',
+                  maxWidth: 280,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={f.reason}
+              >
+                {f.reason ?? '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 /**

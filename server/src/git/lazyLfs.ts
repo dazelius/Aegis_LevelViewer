@@ -140,6 +140,85 @@ export function getBulkPrefetchProgress(): BulkProgress {
   return { ...bulkProgress };
 }
 
+// ---------------------------------------------------------------------------
+// Runtime health diagnostics (exposed via /api/lfs-status)
+// ---------------------------------------------------------------------------
+//
+// The client HUD and ops dashboard need a same-process view of the LFS
+// subsystem's health so they can tell "downloads are slow" from "git-lfs
+// is missing on the host" from "credentials are rejected" — all of which
+// present to the user as "meshes won't load". Writing these out to the
+// server log only helps if someone has shell access; reflecting them in
+// a JSON endpoint lets deploy dashboards and the in-page diagnostic
+// panel surface the cause immediately.
+//
+// The ring buffer keeps the last N fetch error messages (scrubbed) with
+// their timestamps. We cap at `MAX_RECENT_LFS_ERRORS` so a broken LFS
+// endpoint spraying errors doesn't balloon memory — the most recent
+// errors are always the most informative anyway.
+
+export interface LfsHealth {
+  /** Path to the `git-lfs` binary if resolvable on PATH (or a human-readable
+   *  error like `"not found on PATH"` when the probe failed). */
+  gitLfsBinary: string;
+  /** Parsed `git-lfs version` string, or empty if the probe failed. */
+  gitLfsVersion: string;
+  /** Ring-buffered recent fetch error messages, newest first. */
+  recentErrors: Array<{ at: number; message: string }>;
+}
+
+const MAX_RECENT_LFS_ERRORS = 10;
+const _recentErrors: Array<{ at: number; message: string }> = [];
+let _gitLfsProbed = false;
+let _gitLfsBinary = 'not probed yet';
+let _gitLfsVersion = '';
+
+function recordLfsError(message: string): void {
+  // Collapse to the first line — full multi-line dumps already go to
+  // the server log; the endpoint just needs a glanceable summary.
+  const firstLine = String(message).split(/\r?\n/, 1)[0] ?? '';
+  _recentErrors.unshift({ at: Date.now(), message: firstLine.slice(0, 400) });
+  if (_recentErrors.length > MAX_RECENT_LFS_ERRORS) {
+    _recentErrors.length = MAX_RECENT_LFS_ERRORS;
+  }
+}
+
+async function probeGitLfsOnce(): Promise<void> {
+  if (_gitLfsProbed) return;
+  _gitLfsProbed = true;
+  try {
+    const { execFile } = await import('node:child_process');
+    await new Promise<void>((resolve) => {
+      execFile('git-lfs', ['version'], { timeout: 5000 }, (err, stdout) => {
+        if (err) {
+          _gitLfsBinary = `not available (${err.message.split(/\r?\n/, 1)[0]})`;
+          _gitLfsVersion = '';
+        } else {
+          _gitLfsBinary = 'git-lfs';
+          _gitLfsVersion = String(stdout).trim().split(/\r?\n/, 1)[0] ?? '';
+        }
+        resolve();
+      });
+    });
+  } catch (err) {
+    _gitLfsBinary = `probe failed (${err instanceof Error ? err.message : String(err)})`;
+    _gitLfsVersion = '';
+  }
+}
+
+export function getLfsHealth(): LfsHealth {
+  // First call lazily triggers the probe; subsequent calls see the
+  // cached result. The probe is fire-and-forget so the first poll
+  // after boot may still report `"not probed yet"` — the next poll
+  // (a second or two later) will have the real answer.
+  if (!_gitLfsProbed) void probeGitLfsOnce();
+  return {
+    gitLfsBinary: _gitLfsBinary,
+    gitLfsVersion: _gitLfsVersion,
+    recentErrors: _recentErrors.slice(),
+  };
+}
+
 /** Has `git lfs env` diagnostic already been emitted? First failure is
  *  usually all we need to diagnose endpoint/auth issues. */
 let lfsEnvReported = false;
@@ -339,12 +418,11 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       if (batch.length > 0) {
         const firstAbs = absFilePaths[i];
         if (firstAbs && fsSync.existsSync(firstAbs) && isLfsPointerSync(firstAbs)) {
-          console.warn(
-            `[lazyLfs] post-smudge check: ${batch[0]} is STILL an LFS ` +
-              `pointer — LFS server silently rejected the batch ` +
-              `(auth/network/missing). See LFS log dump below for the ` +
-              `real error.`,
-          );
+          const msg =
+            `post-smudge check: ${batch[0]} is STILL an LFS ` +
+            `pointer — LFS server silently rejected the batch (auth/network/missing).`;
+          console.warn(`[lazyLfs] ${msg} See LFS log dump below for the real error.`);
+          recordLfsError(msg);
           // Fire the one-shot diagnostic — both `git lfs env` and the
           // most recent `.git/lfs/logs/*.log` dump. Async but we don't
           // await it so we don't block the fetch chain on diagnostics.
@@ -360,6 +438,7 @@ async function doFetchBatch(absFilePaths: string[], repoDir: string): Promise<vo
       const full = err instanceof Error ? (err.message || String(err)) : String(err);
       const trimmed = full.length > 2000 ? `${full.slice(0, 2000)}\n…(truncated)` : full;
       console.warn(`[lazyLfs] batch failed (non-fatal):\n${trimmed}`);
+      recordLfsError(full);
       // Best-effort: dump LFS env once so we can see the endpoint and
       // auth mode the platform is using. Async but we don't await it.
       reportLfsEnvOnce(repoDir).catch(() => {});

@@ -175,6 +175,53 @@ export function subscribeFbxCacheStats(fn: (s: FbxCacheStats) => void): () => vo
   };
 }
 
+// -------------------------------------------------------------- Failure list ----
+//
+// Per-GUID detail record for terminal failures, so the HUD can surface
+// exactly which FBX blew up and why. The aggregate counter (`_stats.failed`)
+// is great for an at-a-glance badge but tells you nothing about whether
+// you're looking at a server LFS issue (`lfs-pointer` dominant) vs a
+// missing-asset indexing bug (`missing` / HTTP 404) vs a parse regression
+// (`error` with a stack message). Ops needs the breakdown to know which
+// team to ping.
+
+export interface FbxFailure {
+  /** Lowercased 32-char GUID. */
+  guid: string;
+  status: Exclude<FbxStatus, 'pending' | 'ready'>;
+  /** Human-readable cause. For HTTP failures this is `"HTTP <code>"`; for
+   *  LFS pointer timeouts it's `"LFS fetch timed out after retries"`; for
+   *  parse errors it's the thrown `Error.message`. */
+  reason?: string;
+  /** `performance.now()` timestamp when `fetchAndParse` started for this
+   *  guid, so a stale "failed 3 min ago" entry can be distinguished from
+   *  a fresh one without a separate clock. */
+  requestedAt: number;
+  /** `performance.now()` timestamp when the failure was finalised. */
+  failedAt: number;
+  /** Number of HTTP requests actually made (LFS retries count as separate
+   *  attempts). For a 409 that exhausted the retry loop this is
+   *  `MAX_LFS_RETRIES + 1`. Helps ops tell "LFS never ready" from
+   *  "single-shot 404". */
+  attempts: number;
+}
+
+const _failures = new Map<string, FbxFailure>();
+
+function recordFailure(entry: FbxFailure): void {
+  _failures.set(entry.guid, entry);
+}
+
+function clearFailure(guid: string): void {
+  _failures.delete(guid);
+}
+
+/** Snapshot of every GUID currently in a terminal failure state. Returned
+ *  sorted by most recent failure first so the HUD doesn't have to sort. */
+export function getFbxFailures(): FbxFailure[] {
+  return Array.from(_failures.values()).sort((a, b) => b.failedAt - a.failedAt);
+}
+
 /**
  * Minimal stub that stands in for the TGA / texture loaders FBXLoader looks
  * up via `manager.getHandler(ext)`. FBXLoader doesn't just call `.load()` —
@@ -247,6 +294,13 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
   // fetches would appear invisible until their first response came back).
   _stats = { ..._stats, requested: _stats.requested + 1, pending: _stats.pending + 1 };
   publishStats();
+  // Clear any stale failure record from a previous attempt on this guid
+  // (re-issued by `loadFbx`'s lfs-pointer cooldown path). This keeps the
+  // failure map "current state" rather than "history of all attempts".
+  clearFailure(guid);
+
+  const requestedAt = performance.now();
+  let attempts = 0;
 
   const settle = (entry: FbxEntry): FbxEntry => {
     const isReady = entry.status === 'ready';
@@ -256,6 +310,16 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
       ready: _stats.ready + (isReady ? 1 : 0),
       failed: _stats.failed + (isReady ? 0 : 1),
     };
+    if (!isReady && entry.status !== 'pending') {
+      recordFailure({
+        guid,
+        status: entry.status as Exclude<FbxStatus, 'pending' | 'ready'>,
+        reason: entry.reason,
+        requestedAt,
+        failedAt: performance.now(),
+        attempts,
+      });
+    }
     publishStats();
     return entry;
   };
@@ -275,6 +339,7 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
   const LFS_RETRY_MS = 4000;
   let res: Response | null = null;
   for (let attempt = 0; attempt <= MAX_LFS_RETRIES; attempt += 1) {
+    attempts += 1;
     try {
       res = await fetch(url);
     } catch (err) {
