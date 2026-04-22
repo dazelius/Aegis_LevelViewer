@@ -480,8 +480,25 @@ function flushPendingCoalesced(): void {
     batch.resolve();
     return;
   }
-  // Hand off to registerBatch which owns in-flight dedup, scheduleInRepo
-  // serialisation, and the actual git-lfs fetch.
+  // Clear the pre-registration `enqueueLazyFetch` placed on these paths
+  // BEFORE calling `registerBatch`. Without this clear, `registerBatch`'s
+  // fast path (`newPaths = paths.filter(p => !inFlight.has(p))` hits
+  // `inFlight.has(p) === true` for every path and returns an empty
+  // `newPaths` — `doFetchBatch` is never invoked — and the promise it
+  // returns is `inFlight.get(paths[0])` which is `batch.deferred` itself.
+  // The subsequent `.then(batch.resolve, …)` then waits for `batch.resolve`
+  // to fire `batch.deferred`, but the ONLY thing that ever fires
+  // `batch.resolve` is this same `.then` → self-referential deadlock.
+  // The visible symptom is every `ensureLfsFile` call timing out at its
+  // wall-clock budget with no `[lazyLfs] fetching …` log in between.
+  //
+  // Re-registration is safe: the window between this delete and the
+  // `inFlight.set(p, cleanup)` that happens inside `registerBatch` is
+  // purely synchronous (no `await` between the two), so no concurrent
+  // `enqueueLazyFetch` caller can observe a gap where the path appears
+  // un-scheduled.
+  for (const p of paths) inFlight.delete(p);
+  console.log(`[lazyLfs] coalesced batch: handing off ${paths.length} path(s) to registerBatch`);
   registerBatch(paths, batch.repoDir).then(batch.resolve, batch.reject);
 }
 
