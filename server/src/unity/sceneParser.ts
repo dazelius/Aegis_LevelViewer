@@ -15,6 +15,12 @@ import { parseMaterialByGuid, type ParsedMaterial } from './materialParser.js';
 import { getFbxMeshInfo, resolveFbxMeshName } from './metaParser.js';
 import { parseInlineMesh, type InlineMeshData } from './inlineMeshParser.js';
 import { extractRenderSettings, type SceneRenderSettings } from './renderSettingsParser.js';
+import {
+  ensureLfsFile,
+  isLfsPointerBuf,
+  recordExternalLfsError,
+} from '../git/lazyLfs.js';
+import { bundleMode, getRepo2LocalDir } from '../config.js';
 
 /** Unity class IDs we care about for the MVP. */
 const CLASS_GAME_OBJECT = 1;
@@ -356,8 +362,65 @@ function guidOf(ref: unknown): string | undefined {
  * Load and pre-parse all documents from a Unity YAML file (scene or prefab).
  * Exported so prefabParser can share it.
  */
+/** Memoise pointer-YAML warnings so a single not-yet-smudged prefab
+ *  doesn't spray identical lines for every PrefabInstance that
+ *  references it. Cleared indirectly when the file transitions away
+ *  from pointer (next read sees real bytes and bypasses the warn
+ *  branch). */
+const _pointerYamlWarned = new Set<string>();
+
 export async function loadDocs(absPath: string): Promise<RawDoc[]> {
-  const raw = await fs.readFile(absPath, 'utf8');
+  // Read as Buffer first so we can sniff LFS pointer headers before
+  // decoding as UTF-8. An LFS pointer is ~130 bytes of plain ASCII like
+  //
+  //   version https://git-lfs.github.com/spec/v1
+  //   oid sha256:<64 hex>
+  //   size <bytes>
+  //
+  // which parses as "valid but empty" Unity YAML — `preprocessUnityYaml`
+  // finds zero `--- !u!N &ID` doc headers, `loadUnityDocs` returns an
+  // empty array, and callers (especially `parsePrefabByGuid`) then see
+  // an empty doc stream and silently `return undefined`. The visible
+  // symptom on the deploy platform is "same specific prefabs always
+  // missing from the scene", with HUD `failed=0` and `/api/lfs-status`
+  // clean — because nothing ever errored on the fetch path, the YAML
+  // just got dropped during parse with no trace.
+  //
+  // The scene handler's `ensureSceneYamlPointersReady` covers the
+  // scene's DIRECT YAML refs, but nested prefab chains (prefab A →
+  // PrefabInstance(B) → PrefabInstance(C) …) aren't recursed there —
+  // catching the pointer here closes that gap for every level of
+  // nesting for free, because each `parsePrefabByGuid` → `loadDocs`
+  // hop blocks on its own LFS smudge.
+  let buf = await fs.readFile(absPath);
+  if (!bundleMode && isLfsPointerBuf(buf)) {
+    // Bounded synchronous fetch. 15 s is generous for a tiny (~1–50 KB)
+    // YAML asset but short enough that even a pathological chain of
+    // four nested pointer prefabs still finishes inside the proxy's
+    // wall-clock budget (~60 s). `ensureLfsFile` never rejects.
+    await ensureLfsFile(absPath, getRepo2LocalDir(), 15_000);
+    try {
+      buf = await fs.readFile(absPath);
+    } catch {
+      // File gone / unreadable — fall through to the pointer warning
+      // path, which will log and return [].
+    }
+  }
+  if (isLfsPointerBuf(buf)) {
+    if (!_pointerYamlWarned.has(absPath)) {
+      _pointerYamlWarned.add(absPath);
+      const msg =
+        `YAML still a pointer after lazy fetch: ${path.relative(getRepo2LocalDir(), absPath) || absPath}. ` +
+        `PrefabInstance expansion will see an empty doc stream; the subtree will be silently dropped from the scene.`;
+      console.warn(`[sceneParser] ${msg}`);
+      // Surface in /api/lfs-status so ops can see which files are
+      // silently failing without greping server logs.
+      recordExternalLfsError(msg);
+    }
+    return [];
+  }
+
+  const raw = buf.toString('utf8');
   const pre = preprocessUnityYaml(raw);
   const docs = loadUnityDocs(pre);
 

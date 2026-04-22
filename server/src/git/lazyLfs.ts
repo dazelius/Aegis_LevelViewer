@@ -206,6 +206,17 @@ async function probeGitLfsOnce(): Promise<void> {
   }
 }
 
+/** Publicly callable wrapper so non-LFS modules (e.g. the YAML parser)
+ *  can surface silent "file was still a pointer when I tried to read it"
+ *  cases into the same `/api/lfs-status` health feed that the fetch
+ *  loop uses. Without this, silent pointer-YAML drops (`.prefab` /
+ *  `.mat` still a pointer when `loadDocs` runs → `PrefabInstance`
+ *  expansion gets an empty doc stream → whole subtree vanishes from
+ *  the scene with no error anywhere) are invisible to ops. */
+export function recordExternalLfsError(message: string): void {
+  recordLfsError(message);
+}
+
 export function getLfsHealth(): LfsHealth {
   // First call lazily triggers the probe; subsequent calls see the
   // cached result. The probe is fire-and-forget so the first poll
