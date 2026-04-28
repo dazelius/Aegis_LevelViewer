@@ -8,6 +8,7 @@ import type {
 } from './api';
 import { textureUrl } from './api';
 import { buildDebugSlotPalette, buildDebugUvMaterials } from './sceneToR3F';
+import { applyUrpMaterialPatch } from './urpMaterialPatch';
 
 // ===========================================================================
 // Unity high-fidelity renderer (Tier 1: PBR baseline)
@@ -219,11 +220,11 @@ function buildMaterial(src: UnityMaterial): MaterialBundle {
     mat.normalScale = new THREE.Vector2(src.normalScale || 1, src.normalScale || 1);
   }
   if (src.metallicGlossMapGuid) {
-    // URP packs metallic in R and smoothness in A of this texture. Three.js
-    // reads metalness from B and roughness from G of `metalnessMap` /
-    // `roughnessMap`. We approximate by pointing both slots at the same
-    // texture — this is correct for materials that don't use the G/B
-    // channels separately, which is the common case in URP Lit.
+    // Bind to both slots so three enables USE_METALNESSMAP + USE_ROUGHNESSMAP
+    // (required for our onBeforeCompile patch to have the vMetalnessMapUv /
+    // vRoughnessMapUv varyings). The URP → three channel layout mismatch
+    // (metallic in .r not .b, smoothness in .a not .g) is fixed by
+    // applyUrpMaterialPatch below.
     const tex = getCachedTexture(src.metallicGlossMapGuid, { srgb: false, tiling, offset });
     mat.metalnessMap = tex;
     mat.roughnessMap = tex;
@@ -235,6 +236,13 @@ function buildMaterial(src: UnityMaterial): MaterialBundle {
   if (src.emissionMapGuid) {
     mat.emissiveMap = getCachedTexture(src.emissionMapGuid, { srgb: true, tiling, offset });
   }
+
+  applyUrpMaterialPatch(mat, {
+    smoothnessFromAlbedoAlpha: src.smoothnessFromAlbedoAlpha === true,
+    // Detail / height maps aren't yet exported by LevelViewerExporter.cs;
+    // the live-parse path covers them via sceneToR3F. Leaving these
+    // undefined makes the patch a pure channel remap for exports.
+  });
 
   return { mat, disposes };
 }

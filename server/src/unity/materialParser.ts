@@ -73,6 +73,48 @@ export interface ParsedMaterial {
    *  back-only. We report Unity's raw value; the client maps it to
    *  `THREE.DoubleSide / FrontSide / BackSide`. */
   cullMode: number;
+
+  /** URP's `_SmoothnessTextureChannel`: 0 = read smoothness from
+   *  `_MetallicGlossMap.a`, 1 = read smoothness from `_BaseMap.a`. The
+   *  client picks which texture's alpha to sample in its shader patch. */
+  smoothnessSource: 'metallicAlpha' | 'albedoAlpha';
+
+  /** URP `_DetailAlbedoMap` / legacy `_DetailMap`. Overlayed onto base
+   *  colour at 2x UV scale by default. RGB overlay, alpha ignored. */
+  detailAlbedoMap?: MaterialTextureRef;
+  /** URP `_DetailNormalMap`. Blended with the primary normal map. */
+  detailNormalMap?: MaterialTextureRef;
+  /** URP / Built-in `_ParallaxMap` or `_HeightMap`. Used as a bump
+   *  displacement hint; we approximate via extra bump sampling rather
+   *  than true parallax. */
+  heightMap?: MaterialTextureRef;
+
+  /** `_DetailAlbedoMapScale`: intensity of the detail overlay, 0..2. */
+  detailAlbedoScale: number;
+  /** `_DetailNormalMapScale`: intensity of the detail normal. */
+  detailNormalScale: number;
+  /** `_Parallax` / `_HeightmapScale`: bump scale for the height map. */
+  heightScale: number;
+
+  /** Per-material reflection cubemap (e.g. `Aegis/BasicLit._EnvCubemap` /
+   *  `_ReflectionMap`). When authored the shader uses THIS cubemap for its
+   *  IBL specular term instead of (or in addition to) the scene reflection
+   *  probe. For our purposes we bind it as `material.envMap` on the client
+   *  so distinctive per-asset lighting (e.g. the `SampleReflection.exr`
+   *  SalarDeUyun-factory cube) actually reads on the surface. */
+  reflectionCubemap?: MaterialTextureRef;
+  /** `_ReflectionIntensity` / `_Reflection_Intensity`. Maps to
+   *  `material.envMapIntensity`. Default 1. */
+  reflectionIntensity: number;
+  /** `_RoughnessDistortion` / `_Roughness_Distortion`. A per-material
+   *  roughness bias applied on top of the PBR smoothness — higher values
+   *  blur the reflection, matching the Aegis BasicLit custom slider. */
+  roughnessDistortion: number;
+  /** True when the shader has an explicit `_USE_REFLECTION` /
+   *  `_UseReflection` toggle set on. Lets the client skip envMap binding
+   *  for materials that never meant to read reflections even if the cube
+   *  texture slot is populated. */
+  useReflection: boolean;
 }
 
 /** Legacy alias kept for callers that only need the simple view. */
@@ -128,6 +170,16 @@ const TEX_NORMAL = ['_BumpMap', '_NormalMap'];
 const TEX_OCCLUSION = ['_OcclusionMap'];
 const TEX_METALLIC = ['_MetallicGlossMap', '_SpecGlossMap'];
 const TEX_EMISSION = ['_EmissionMap'];
+const TEX_DETAIL_ALBEDO = ['_DetailAlbedoMap', '_DetailMap'];
+const TEX_DETAIL_NORMAL = ['_DetailNormalMap'];
+const TEX_HEIGHT = ['_ParallaxMap', '_HeightMap'];
+// Aegis/BasicLit (and many other custom Unity shaders) ship a dedicated
+// per-material reflection cubemap slot. URP Lit authors typically lean on
+// scene-wide reflection probes, but this project authors per-material
+// cubemaps in _EnvCubemap / _ReflectionMap. Check `_EnvCubemap` first —
+// it's the Aegis shader's primary slot — and fall back to `_ReflectionMap`
+// / `_ReflectionCubemap` which some materials use interchangeably.
+const TEX_REFLECTION_CUBE = ['_EnvCubemap', '_ReflectionMap', '_ReflectionCubemap', '_Cube'];
 
 const FLOAT_METALLIC = ['_Metallic'];
 const FLOAT_SMOOTHNESS = ['_Smoothness', '_Glossiness'];
@@ -138,6 +190,18 @@ const FLOAT_CULL = ['_Cull', '_CullMode'];
 const FLOAT_SURFACE = ['_Surface']; // URP: 0 opaque, 1 transparent
 const FLOAT_ALPHA_CLIP = ['_AlphaClip']; // URP: 0 off, 1 on
 const FLOAT_MODE = ['_Mode']; // Standard shader: 0 opaque, 1 cutout, 2 fade, 3 transparent
+const FLOAT_SMOOTHNESS_CHANNEL = ['_SmoothnessTextureChannel']; // URP: 0=metal.a, 1=albedo.a
+const FLOAT_DETAIL_ALBEDO_SCALE = ['_DetailAlbedoMapScale'];
+const FLOAT_DETAIL_NORMAL_SCALE = ['_DetailNormalMapScale'];
+const FLOAT_HEIGHT_SCALE = ['_Parallax', '_HeightmapScale'];
+// Aegis BasicLit exposes BOTH `_ReflectionIntensity` (inspector-visible
+// slider) and `_Reflection_Intensity` (legacy underscore variant written
+// by older shader versions). Likewise for RoughnessDistortion. When both
+// are present we take the FIRST match which, per our priority order, is
+// the inspector-authored one that actually drives the final pixels.
+const FLOAT_REFLECTION_INTENSITY = ['_ReflectionIntensity', '_Reflection_Intensity'];
+const FLOAT_ROUGHNESS_DISTORTION = ['_RoughnessDistortion', '_Roughness_Distortion'];
+const FLOAT_USE_REFLECTION = ['_UseReflection'];
 
 function pickNamedEntry<T>(
   list: Array<Record<string, T>> | undefined,
@@ -347,6 +411,9 @@ export async function parseMaterialByGuid(guid: string): Promise<ParsedMaterial 
   const emissionMap = emissionEnabled
     ? textureRef(pickNamedEntry(texEnvs, TEX_EMISSION))
     : undefined;
+  const detailAlbedoMap = textureRef(pickNamedEntry(texEnvs, TEX_DETAIL_ALBEDO));
+  const detailNormalMap = textureRef(pickNamedEntry(texEnvs, TEX_DETAIL_NORMAL));
+  const heightMap = textureRef(pickNamedEntry(texEnvs, TEX_HEIGHT));
 
   const metallic = pickFloat(floats, FLOAT_METALLIC) ?? 0;
   const smoothness = pickFloat(floats, FLOAT_SMOOTHNESS) ?? 0.5;
@@ -354,6 +421,44 @@ export async function parseMaterialByGuid(guid: string): Promise<ParsedMaterial 
   const occlusionStrength = pickFloat(floats, FLOAT_OCCLUSION_STRENGTH) ?? 1;
   const alphaCutoff = pickFloat(floats, FLOAT_CUTOFF) ?? 0.5;
   const cullMode = pickFloat(floats, FLOAT_CULL) ?? 2;
+
+  // URP `_SmoothnessTextureChannel`: 0 = read from `_MetallicGlossMap.a`,
+  // 1 = read from `_BaseMap.a`. Some shaders also drive this via the
+  // `_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A` keyword — we honour either.
+  const smoothnessChannelRaw = pickFloat(floats, FLOAT_SMOOTHNESS_CHANNEL);
+  const albedoAlphaKeyword =
+    /_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A/i.test(body.m_ShaderKeywords ?? '');
+  const smoothnessSource: ParsedMaterial['smoothnessSource'] =
+    smoothnessChannelRaw === 1 || albedoAlphaKeyword ? 'albedoAlpha' : 'metallicAlpha';
+
+  const detailAlbedoScale = pickFloat(floats, FLOAT_DETAIL_ALBEDO_SCALE) ?? 1;
+  const detailNormalScale = pickFloat(floats, FLOAT_DETAIL_NORMAL_SCALE) ?? 1;
+  const heightScale = pickFloat(floats, FLOAT_HEIGHT_SCALE) ?? 0.02;
+
+  // Per-material reflection cubemap (Aegis/BasicLit._EnvCubemap etc). We
+  // honour the cube only when the shader's `_UseReflection` flag is on OR
+  // the `_USE_REFLECTION` keyword is present in `m_ValidKeywords` — without
+  // either, the cube texture is often a leftover slot the author never
+  // activated and binding it still changes reflection brightness on the
+  // surface. `m_ValidKeywords` is the authoritative "compiled-in" keyword
+  // set on URP materials; `m_ShaderKeywords` is an older spot that's empty
+  // on modern .mat files but we still check it as a fallback.
+  const reflectionCubemap = textureRef(pickNamedEntry(texEnvs, TEX_REFLECTION_CUBE));
+  const reflectionIntensity = pickFloat(floats, FLOAT_REFLECTION_INTENSITY) ?? 1;
+  const roughnessDistortion = pickFloat(floats, FLOAT_ROUGHNESS_DISTORTION) ?? 0;
+  const useReflectionFlag = pickFloat(floats, FLOAT_USE_REFLECTION);
+  // `m_ValidKeywords` is a YAML array, not a single string, but our
+  // consumer types it as optional string — accept both shapes.
+  const validKeywordsRaw = (body as unknown as { m_ValidKeywords?: unknown }).m_ValidKeywords;
+  const validKeywordsText = Array.isArray(validKeywordsRaw)
+    ? validKeywordsRaw.filter((k) => typeof k === 'string').join(' ')
+    : typeof validKeywordsRaw === 'string'
+      ? validKeywordsRaw
+      : '';
+  const useReflectionKeyword =
+    /_USE_REFLECTION(\s|$)/i.test(validKeywordsText) ||
+    /_USE_REFLECTION(\s|$)/i.test(body.m_ShaderKeywords ?? '');
+  const useReflection = useReflectionFlag === 1 || useReflectionKeyword;
 
   const shaderGuid = normalizeGuid(body.m_Shader?.guid);
   const { kind: shaderKind, name: shaderName } = await classifyShader(shaderGuid);
@@ -381,6 +486,19 @@ export async function parseMaterialByGuid(guid: string): Promise<ParsedMaterial 
     renderMode: deriveRenderMode(body, color[3]),
     alphaCutoff,
     cullMode,
+
+    smoothnessSource,
+    detailAlbedoMap,
+    detailNormalMap,
+    heightMap,
+    detailAlbedoScale,
+    detailNormalScale,
+    heightScale,
+
+    reflectionCubemap,
+    reflectionIntensity,
+    roughnessDistortion,
+    useReflection,
   };
 
   cacheSet(key, mat);

@@ -20,7 +20,6 @@ import { getNickname, subscribeNickname } from './nickname';
  *   - `publishPose(pose)` is called every render tick from Play
  *     mode (or edit mode with `visible:false`) to broadcast the
  *     local player's position.
- *   - `sendChat(text)` posts a chat message into the current room.
  *
  * The connection auto-reconnects with exponential backoff if the
  * server drops us — the hub is expected to be long-running but
@@ -58,7 +57,6 @@ type ServerMsg =
   | { type: 'peer_join'; id: string; nickname: string }
   | { type: 'peer_leave'; id: string }
   | { type: 'peer_pose'; id: string; pose: PeerPose }
-  | { type: 'peer_chat'; id: string; nickname: string; text: string; ts: number }
   | { type: 'feedback_added'; feedback: Feedback }
   | { type: 'feedback_updated'; feedback: Feedback }
   | { type: 'feedback_removed'; scenePath: string; id: string }
@@ -76,29 +74,52 @@ let announcedScene = ''; // last scene we told the server about
 let helloSent = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 500; // grows up to 10s
-/** Consecutive connect failures without a successful `open`. After
- *  MAX_RECONNECT_ATTEMPTS we give up and stop reconnecting — the
- *  deployment's reverse proxy likely does not support WebSocket
- *  upgrades (common for iframe-proxy platforms), and infinite retries
- *  just spam the user's console with red `ws error` lines. Multiplayer
- *  is a best-effort feature; the viewer works fine without it. */
+/** Consecutive connect failures without a successful `open`. After the
+ *  very first failed handshake we give up — most platform reverse
+ *  proxies (e.g. UAAutoTool's `/api/v1/ai-tools/.../proxy/`) strip the
+ *  `Upgrade: websocket` header, so every reconnect attempt is a
+ *  guaranteed failed handshake that registers as a non-2xx at the
+ *  proxy. Five retries × every page reload was the single biggest
+ *  contributor to the platform's error-count metric.
+ *
+ *  We persist the disabled flag to `sessionStorage` so navigations
+ *  inside the same tab don't replay the failed handshake on every
+ *  page mount. A new tab still tries once, in case the deployment
+ *  has been fixed since. Multiplayer is a best-effort feature; the
+ *  viewer works fine without it. */
 let consecutiveFailures = 0;
 let reconnectDisabled = false;
-const MAX_RECONNECT_ATTEMPTS = 5;
+const MAX_RECONNECT_ATTEMPTS = 1;
+const WS_DISABLED_SESSION_KEY = 'aegisgram.ws.disabled';
+
+/** Build-time opt-out: set `VITE_DISABLE_WS=1` on platforms that we
+ *  already know don't support WS upgrades. Skips the first handshake
+ *  attempt entirely, so even the diagnostic "first try" never fires. */
+const WS_BUILD_DISABLED =
+  (import.meta.env as Record<string, string | undefined>).VITE_DISABLE_WS === '1';
+
+function isWsPersistentlyDisabled(): boolean {
+  if (WS_BUILD_DISABLED) return true;
+  if (reconnectDisabled) return true;
+  try {
+    return sessionStorage.getItem(WS_DISABLED_SESSION_KEY) === '1';
+  } catch {
+    // sessionStorage can throw under sandboxed iframes; treat as enabled.
+    return false;
+  }
+}
+
+function markWsDisabled(): void {
+  reconnectDisabled = true;
+  try {
+    sessionStorage.setItem(WS_DISABLED_SESSION_KEY, '1');
+  } catch {
+    /* best-effort */
+  }
+}
 
 /** Last-seen state of every peer in the current room (excluding self). */
 const peers = new Map<string, Peer>();
-
-// --- Chat log (bounded ring of recent messages for the HUD) ---
-export interface ChatLine {
-  id: string; // sender id (empty for system lines)
-  nickname: string;
-  text: string;
-  ts: number;
-  self: boolean;
-}
-const CHAT_MAX = 50;
-const chatLog: ChatLine[] = [];
 
 // --- Feedback realtime bridge (notifies the feedbackStore) ---
 type FeedbackEventListener =
@@ -122,14 +143,9 @@ export function subscribeFeedbackEvents(
 
 type VoidSub = () => void;
 const peerSubs = new Set<VoidSub>();
-const chatSubs = new Set<VoidSub>();
 
 function notifyPeers(): void {
   for (const fn of peerSubs) fn();
-}
-
-function notifyChat(): void {
-  for (const fn of chatSubs) fn();
 }
 
 export function subscribePeers(fn: VoidSub): () => void {
@@ -139,22 +155,10 @@ export function subscribePeers(fn: VoidSub): () => void {
   };
 }
 
-export function subscribeChat(fn: VoidSub): () => void {
-  chatSubs.add(fn);
-  return () => {
-    chatSubs.delete(fn);
-  };
-}
-
 /** Snapshot of all peers currently in the room. Fresh array each call
  *  so React's shallow-compare picks up changes. Excludes self. */
 export function listPeers(): Peer[] {
   return Array.from(peers.values());
-}
-
-/** Snapshot of the recent chat log (oldest first). */
-export function listChat(): ChatLine[] {
-  return chatLog.slice();
 }
 
 export function getSelfId(): string | null {
@@ -179,6 +183,11 @@ export function ensureConnected(): void {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     return;
   }
+  // Honour the persistent-disable flag set after the first failed
+  // handshake (or by the build-time `VITE_DISABLE_WS` opt-out). On
+  // platforms where the proxy strips `Upgrade: websocket`, every
+  // attempt is a guaranteed 4xx/5xx — silently no-op instead.
+  if (isWsPersistentlyDisabled()) return;
   try {
     ws = new WebSocket(buildUrl());
   } catch (err) {
@@ -236,12 +245,13 @@ function onClose(): void {
   // error. We'd rather log once and be quiet.
   consecutiveFailures += 1;
   if (consecutiveFailures >= MAX_RECONNECT_ATTEMPTS) {
-    reconnectDisabled = true;
+    markWsDisabled();
     console.warn(
       `[multiplayer] giving up after ${consecutiveFailures} failed ` +
-        'connect attempts. This deployment likely does not support ' +
+        'connect attempt(s). This deployment likely does not support ' +
         'WebSocket upgrades; multiplayer (live feedback sync, co-viewing) ' +
-        'is disabled. Scene viewing and feedback posting still work.',
+        'is disabled for this tab. Scene viewing and feedback posting ' +
+        'still work.',
     );
     return;
   }
@@ -274,13 +284,10 @@ function onMessage(ev: MessageEvent<string>): void {
     case 'peer_join': {
       peers.set(msg.id, { id: msg.id, nickname: msg.nickname, pose: null, lastPoseAt: 0 });
       notifyPeers();
-      pushSystemChat(`${msg.nickname || 'Guest'} 님이 입장했어요.`);
       return;
     }
     case 'peer_leave': {
-      const p = peers.get(msg.id);
       peers.delete(msg.id);
-      if (p) pushSystemChat(`${p.nickname || 'Guest'} 님이 나갔어요.`);
       notifyPeers();
       return;
     }
@@ -303,16 +310,6 @@ function onMessage(ev: MessageEvent<string>): void {
       // Pose updates fire at render cadence — don't re-render React
       // components for every one of them. Consumers read live pose
       // inside useFrame instead (see RemotePlayers.tsx).
-      return;
-    }
-    case 'peer_chat': {
-      pushChat({
-        id: msg.id,
-        nickname: msg.nickname,
-        text: msg.text,
-        ts: msg.ts,
-        self: selfId !== null && msg.id === selfId,
-      });
       return;
     }
     case 'feedback_added': {
@@ -353,16 +350,6 @@ function onMessage(ev: MessageEvent<string>): void {
     default:
       return;
   }
-}
-
-function pushChat(line: ChatLine): void {
-  chatLog.push(line);
-  while (chatLog.length > CHAT_MAX) chatLog.shift();
-  notifyChat();
-}
-
-function pushSystemChat(text: string): void {
-  pushChat({ id: '', nickname: '시스템', text, ts: Date.now(), self: false });
 }
 
 // ---------------------------------------------------------------------
@@ -420,14 +407,6 @@ export function publishPose(pose: PeerPose): void {
   if (!currentScene) return;
   if (!helloSent) return;
   ws.send(JSON.stringify({ type: 'pose', pose }));
-}
-
-/** Post a chat message into the current room. */
-export function sendChat(text: string): void {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  const trimmed = text.trim().slice(0, 500);
-  if (!trimmed) return;
-  ws.send(JSON.stringify({ type: 'chat', text: trimmed }));
 }
 
 // Nickname changes mid-session: re-send `hello` so the server (and

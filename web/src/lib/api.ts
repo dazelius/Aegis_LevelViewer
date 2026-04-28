@@ -81,6 +81,10 @@ export interface MaterialJson {
   metallic: number;
   smoothness: number;
   metallicGlossMapGuid: string | null;
+  /** When true the smoothness value lives in `_BaseMap.a` (URP's
+   *  `_SmoothnessTextureChannel=1`), otherwise in
+   *  `_MetallicGlossMap.a` (URP default). */
+  smoothnessFromAlbedoAlpha: boolean;
 
   occlusionMapGuid: string | null;
   occlusionStrength: number;
@@ -88,9 +92,33 @@ export interface MaterialJson {
   emissionColor: [number, number, number];
   emissionMapGuid: string | null;
 
+  /** URP detail overlay maps and their associated intensity scalars.
+   *  Applied via `onBeforeCompile` patch on `MeshStandardMaterial`. */
+  detailAlbedoMapGuid: string | null;
+  detailNormalMapGuid: string | null;
+  heightMapGuid: string | null;
+  detailAlbedoScale: number;
+  detailNormalScale: number;
+  heightScale: number;
+
   renderMode: 'Opaque' | 'Cutout' | 'Transparent' | 'Fade';
   alphaCutoff: number;
   doubleSided: boolean;
+
+  /** Per-material reflection cubemap GUID. When non-null, the client
+   *  loads this texture (EXR / HDR equirect or cubemap), PMREM-filters
+   *  it, and binds it as `material.envMap`. This is how Aegis/BasicLit's
+   *  `_EnvCubemap` slot survives the URP -> three.js translation. */
+  reflectionCubemapGuid: string | null;
+  /** Scalar multiplier bound to `material.envMapIntensity`. From
+   *  `_ReflectionIntensity`. */
+  reflectionIntensity: number;
+  /** Additional roughness bias for env-map sampling. Bigger = softer
+   *  reflections. Maps onto `material.userData.roughnessDistortion`
+   *  which the URP patch applies when sampling the reflection LOD. */
+  roughnessDistortion: number;
+  /** True iff the source material explicitly turned reflections on. */
+  useReflection: boolean;
 }
 
 export interface SceneRenderSettings {
@@ -110,6 +138,40 @@ export interface SceneRenderSettings {
 
   indirectIntensity: number;
   skyboxMaterialGuid?: string;
+  /** Decoded skybox material (populated by `parseSkyboxByGuid` on the
+   *  server). Undefined when the scene has no skybox or when the
+   *  referenced `.mat` couldn't be resolved — in that case the client
+   *  falls back to a neutral RoomEnvironment IBL probe. */
+  skybox?: SkyboxJson;
+}
+
+export type SkyboxKind = 'cubemap' | 'sixsided' | 'panoramic' | 'procedural' | 'unknown';
+
+export interface SkyboxJson {
+  guid: string;
+  shaderName?: string;
+  kind: SkyboxKind;
+
+  cubemapGuid?: string;
+  panoramicGuid?: string;
+  /** Six-sided layout: [front, back, left, right, up, down]. */
+  sixSidedGuids?: [
+    string | null,
+    string | null,
+    string | null,
+    string | null,
+    string | null,
+    string | null,
+  ];
+
+  tint?: [number, number, number];
+  exposure?: number;
+  rotationDeg?: number;
+
+  sunSize?: number;
+  skyTint?: [number, number, number];
+  groundColor?: [number, number, number];
+  atmosphereThickness?: number;
 }
 
 export interface GameObjectNode {
@@ -166,6 +228,24 @@ export interface GameObjectNode {
      *  (resolved via the FBX's `.meta` `internalIDToNameTable`). Only
      *  consulted when `renderAllFbxMeshes` is true. */
     removedFbxSubmeshNames?: string[];
+    /** Per-sub-object Transform overrides the client should apply in
+     *  place of the FBX's own parent-local values when expanding this
+     *  FBX (only consulted when `renderAllFbxMeshes` is true). Keyed by
+     *  the FBX sub-object name exactly as FBXLoader reports it
+     *  (`Object3D.name`). Values are ALREADY in three's coord system
+     *  — position x flipped, quaternion y/z negated — so the client
+     *  can pass them straight into `<group position quaternion scale>`
+     *  without re-converting.
+     *
+     *  Motivating case: Factory_New_B keeps the full F_Sample.fbx
+     *  prefab body and authors per-sub-transform rotations (e.g.
+     *  `LT_FactoryCon_A.009` → 90° Z). Without this field every
+     *  rotated piece rendered at the FBX-default orientation. */
+    subMeshOverrides?: Record<string, {
+      position?: [number, number, number];
+      quaternion?: [number, number, number, number];
+      scale?: [number, number, number];
+    }>;
   };
   light?: {
     type: 'Directional' | 'Point' | 'Spot' | 'Area' | 'Unknown';
@@ -178,6 +258,20 @@ export interface GameObjectNode {
     fov: number;
     near: number;
     far: number;
+  };
+  /** Reflection Probe (Unity classId 215). Position is implicit — the
+   *  client reads it off the enclosing group's `matrixWorld` after
+   *  mount, which is cheaper than recomputing a world transform
+   *  server-side just for probes. */
+  reflectionProbe?: {
+    mode: 'Baked' | 'Custom' | 'Realtime' | 'Unknown';
+    boxSize: [number, number, number];
+    boxOffset: [number, number, number];
+    boxProjection: boolean;
+    intensity: number;
+    blendDistance: number;
+    importance: number;
+    customBakedTextureGuid?: string;
   };
   children: GameObjectNode[];
 }
@@ -308,12 +402,17 @@ export async function fetchScene(
   const encoded = relPath.split('/').map(encodeURIComponent).join('/');
   const url = apiUrl(`/api/levels/${encoded}`);
 
-  // Retry on 409 `lfs-pointer`. The server holds the request for up
-  // to ~45 s while it pulls the scene's LFS blob synchronously; if it
-  // still isn't on disk it returns a 409 and we retry — each attempt
+  // Retry on the server's `status:'pending'` signal. The server holds
+  // the request for up to ~12 s while it pulls the scene's LFS blob
+  // synchronously; if it still isn't on disk it returns 200 with
+  // `{status:'pending', hint, ...}` and we retry — each attempt
   // typically lands within another cycle because the underlying
   // git-lfs fetch is still running in the background and subsequent
   // attempts just join the in-flight promise.
+  //
+  // We use 200 + JSON sentinel rather than the older 409 status so
+  // platform reverse proxies (e.g. UAAutoTool) don't count cold-open
+  // retry loops as errors in their dashboards.
   //
   // Budget tuning: 12 attempts × ~50 s (45 s server wait + 5 s
   // inter-attempt sleep) ≈ 10 min of total patience. That covers
@@ -335,21 +434,30 @@ export async function fetchScene(
       phase: 'requesting',
     });
     const res = await fetch(url);
-    if (res.status !== 409) {
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`${res.status} ${res.statusText}: ${text}`);
-      }
+    // Legacy 409 path is kept for back-compat with older server
+    // builds — newer servers respond 200 + `status:'pending'` JSON,
+    // which we handle below by inspecting the body.
+    if (!res.ok && res.status !== 409) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    }
+    let body: unknown = null;
+    try {
+      body = await res.clone().json();
+    } catch {
+      // non-JSON: definitely not a pending sentinel, fall through.
+    }
+    const pending =
+      res.status === 409 ||
+      (body !== null &&
+        typeof body === 'object' &&
+        (body as { status?: unknown }).status === 'pending');
+    if (!pending) {
       return (await res.json()) as SceneJson | UnityExport;
     }
-    // 409 → peek at the server's hint so the UI can surface "LFS fetch
-    // in progress" (or whatever lazyLfs decided to say) instead of a
-    // generic spinner.
-    try {
-      const body = (await res.clone().json()) as { hint?: string };
-      if (body && typeof body.hint === 'string') lastHint = body.hint;
-    } catch {
-      // body wasn't JSON — ignore, keep the previous hint.
+    if (body && typeof body === 'object') {
+      const h = (body as { hint?: unknown }).hint;
+      if (typeof h === 'string') lastHint = h;
     }
     if (attempt === MAX_ATTEMPTS - 1) {
       const text = await res.text().catch(() => '');

@@ -57,7 +57,6 @@ import { FeedbackPanel } from '../lib/FeedbackPanel';
 import { FeedbackTooltip } from '../lib/FeedbackTooltip';
 import { RemotePlayers } from '../lib/RemotePlayers';
 import { LocalPoseBroadcaster } from '../lib/LocalPoseBroadcaster';
-import { ChatHUD } from '../lib/ChatHUD';
 import { ensureConnected, setCurrentScene } from '../lib/multiplayer';
 
 export default function LevelViewer() {
@@ -239,6 +238,20 @@ function DebugSceneHook() {
 }
 
 /**
+ * Reactively syncs the renderer's tone-map exposure with the HUD
+ * slider. `<Canvas gl={{ toneMappingExposure }}>` only applies on
+ * initial creation; without this, dragging the slider wouldn't update
+ * anything until a full scene remount.
+ */
+function ToneExposureBridge({ exposure }: { exposure: number }) {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    gl.toneMappingExposure = exposure;
+  }, [gl, exposure]);
+  return null;
+}
+
+/**
  * Publishes the live R3F camera on the provided ref so callers
  * outside the Canvas tree (the Enter-key feedback capture in
  * LevelViewer) can read pose without threading context.
@@ -344,6 +357,15 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
   // bugs where the server-side decoder already emits GL-oriented image data
   // and three.js's default `flipY = true` inverts it a second time.
   const [debugFlipYOff, setDebugFlipYOff] = useState(false);
+
+  // Scene-wide IBL strength multiplier applied to `scene.environmentIntensity`.
+  // The RoomEnvironment fallback (no authored skybox) is noticeably
+  // brighter than most Unity scenes expect, so we default to 1.0 here
+  // and let the user dial it down when the scene reads as overbright.
+  // Tonemap exposure sits next to it for the opposite case (scene looks
+  // too dark after ACES).
+  const [envIntensityMultiplier, setEnvIntensityMultiplier] = useState(1.0);
+  const [toneExposure, setToneExposure] = useState(1.0);
 
   // Per-FBX slot-permutation overrides, keyed by lowercased mesh GUID.
   // Edited from the Inspector when the selected object's FBX exhibits
@@ -885,6 +907,33 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
           >
             {debugFlipYOff ? 'flipY: OFF (forced)' : 'flipY: ON (default)'}
           </button>
+          {/* IBL intensity + tone-map exposure: two dials that together
+              let the user land on a mood match without a rebuild. The
+              RoomEnvironment fallback is sized for a generic Unity URP
+              scene; indoor greyblock scenes often look right at env
+              ~0.4 and exposure ~0.9. */}
+          <label className="hud-slider" title="Scales scene.environmentIntensity — controls how strongly skybox/room IBL reflects off surfaces. Lower this when metals / glossy walls read as overbright.">
+            <span>Env x{envIntensityMultiplier.toFixed(2)}</span>
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.05}
+              value={envIntensityMultiplier}
+              onChange={(e) => setEnvIntensityMultiplier(parseFloat(e.target.value))}
+            />
+          </label>
+          <label className="hud-slider" title="Tone-mapping exposure. Default 1.0 = neutral ACES. Lower to darken the whole image, higher to brighten before ACES compression.">
+            <span>Exp x{toneExposure.toFixed(2)}</span>
+            <input
+              type="range"
+              min={0.3}
+              max={2.0}
+              step={0.05}
+              value={toneExposure}
+              onChange={(e) => setToneExposure(parseFloat(e.target.value))}
+            />
+          </label>
         </div>
         <RebakeButton relPath={relPath} />
       </div>
@@ -902,11 +951,21 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
         // canvas when the user presses Enter to author feedback; the
         // frame-per-frame cost of keeping the back buffer around is
         // small and the feature is unusable without it.
-        gl={{ preserveDrawingBuffer: true }}
+        //
+        // ACES Filmic + exposure=1.0 + sRGB output matches Unity URP's
+        // default colour-management output so MeshStandardMaterial
+        // surfaces under IBL / emission don't read as washed-out
+        // linear-space garbage. Previously this was NoToneMapping which
+        // clamped HDR highlights and made every metallic surface look
+        // muted.
+        gl={{
+          preserveDrawingBuffer: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: toneExposure,
+          outputColorSpace: THREE.SRGBColorSpace,
+        }}
         style={{ background: '#0b0d11' }}
         onCreated={({ gl }) => {
-          // Capture the underlying DOM canvas so `enterPlay` can
-          // request pointer lock on it inside the click handler.
           canvasRef.current = gl.domElement;
         }}
         onPointerMissed={(e) => {
@@ -920,6 +979,7 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
         }}
       >
         <DebugSceneHook />
+        <ToneExposureBridge exposure={toneExposure} />
         <CameraRefBridge cameraRef={cameraRef} />
         <Suspense fallback={null}>
           {/* SceneRoots instantiates the scene lights + ambient + fog
@@ -960,6 +1020,7 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
               debugUnlitPreview={debugUnlitPreview}
               debugFlipYOff={debugFlipYOff}
               slotPermutations={slotPermutations}
+              envIntensityMultiplier={envIntensityMultiplier}
             />
           </SelectionProvider>
           <OrbitControls
@@ -1080,12 +1141,6 @@ function ViewerCanvas({ scene, relPath }: { scene: SceneJson; relPath: string })
           so text is laid out by the browser's font stack and can be
           any length without blowing up GPU memory. */}
       {playMode && <FeedbackBubblesOverlay scenePath={relPath} />}
-      {/* Multiplayer chat + presence HUD. Always visible (both Play
-          and edit) so a lurker in edit mode can still talk to Play
-          mode users and vice versa. Input field self-raises the
-          same inputSuppressed flag the feedback composer uses so
-          typing doesn't walk the character. */}
-      <ChatHUD />
       {/* Feedback composer — HTML modal that takes the text body.
           Rendered outside the Canvas so it receives normal DOM
           focus / keyboard events. Closes via either submit or Esc;
@@ -2263,7 +2318,13 @@ function UnityExportCanvas({ scene, relPath }: { scene: UnityExport; relPath: st
         }}
         shadows={false}
         style={{ background: '#0b0d11' }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        gl={{
+          antialias: true,
+          powerPreference: 'high-performance',
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.0,
+          outputColorSpace: THREE.SRGBColorSpace,
+        }}
       >
         <Suspense fallback={null}>
           <UnityRenderSettingsApply scene={scene} />
@@ -2298,7 +2359,6 @@ function UnityExportCanvas({ scene, relPath }: { scene: UnityExport; relPath: st
           <axesHelper args={[Math.min(5, radius * 0.1)]} />
         </Suspense>
       </Canvas>
-      <ChatHUD />
     </div>
   );
 }

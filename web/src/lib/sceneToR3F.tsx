@@ -9,15 +9,28 @@ import {
 } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type {
   GameObjectNode,
   InlineMeshData,
   MaterialJson,
   SceneJson,
   SceneRenderSettings,
+  SkyboxJson,
 } from './api';
 import { textureUrl } from './api';
 import { loadFbx, loadFbxGeometry, type FbxEntry } from './fbxCache';
+import { applyUrpMaterialPatch } from './urpMaterialPatch';
+import {
+  ReflectionProbeRegistryProvider,
+  ReflectionProbeSystem,
+  useRegisterReflectionProbe,
+  type ProbeMode,
+} from './reflectionProbes';
+import {
+  MaterialReflectionCubemapSystem,
+  setReflectionCubemapUserData,
+} from './materialReflectionCubemap';
 
 // ---------------------------------------------------------------- Selection ----
 //
@@ -302,6 +315,7 @@ export function SceneRoots({
   debugUnlitPreview = false,
   debugFlipYOff = false,
   slotPermutations,
+  envIntensityMultiplier = 1,
 }: {
   roots: GameObjectNode[];
   inlineMeshes?: Record<string, InlineMeshData>;
@@ -315,6 +329,10 @@ export function SceneRoots({
   debugUnlitPreview?: boolean;
   debugFlipYOff?: boolean;
   slotPermutations?: Record<string, number[]>;
+  /** HUD-driven IBL strength multiplier (default 1). Lets users dial
+   *  down the room-env fallback when a ProBuilder / greyblock scene
+   *  reads as overbright, without editing the Unity scene itself. */
+  envIntensityMultiplier?: number;
 }) {
   const enabledLightFileIds = useMemo(() => pickVisibleLights(roots), [roots]);
   const ctx = useMemo(
@@ -352,19 +370,56 @@ export function SceneRoots({
 
   return (
     <SceneContext.Provider value={ctx}>
-      {renderSettings && <RenderSettingsApply settings={renderSettings} />}
-      <BaselineLights settings={renderSettings} />
-      {roots.map((root, idx) => (
-        <SceneNode key={`${root.fileID}_${idx}`} node={root} />
-      ))}
-      <GlobalSelectionHighlight />
+      <ReflectionProbeRegistryProvider>
+        {renderSettings && <RenderSettingsApply settings={renderSettings} />}
+        <BaselineLights settings={renderSettings} />
+        {/* IBL environment. Uses the scene's authored skybox when one is
+            present; falls back to a neutral RoomEnvironment probe so
+            MeshStandardMaterial surfaces always have something to reflect.
+            Per-mesh envMap overrides from ReflectionProbeSystem (below)
+            take precedence on surfaces inside probe volumes. */}
+        <EnvironmentRoot
+          skybox={renderSettings?.skybox}
+          ambientMode={renderSettings?.ambientMode}
+          indirectIntensity={renderSettings?.indirectIntensity}
+          intensityMultiplier={envIntensityMultiplier}
+        />
+        {roots.map((root, idx) => (
+          <SceneNode key={`${root.fileID}_${idx}`} node={root} />
+        ))}
+        {/* Walks the mounted scene once roots have settled, loads probe
+            cubemaps, and assigns `envMap` to nearest-probe on every
+            MeshStandardMaterial. Keyed on `roots` identity so scene
+            reloads re-run the assignment. */}
+        <ReflectionProbeSystem rootsVersion={roots} />
+        {/* Per-material reflection cubemap binder. Reads
+            `material.userData.__aegisReflectionCubemap` (stamped by
+            `buildMaterial`), loads each unique GUID once, PMREM-filters
+            it, and assigns the result as `material.envMap`. Aegis/
+            BasicLit materials carry their `_EnvCubemap` slot through
+            this path — without it, reflection-heavy scenes lose their
+            asset-authored look. `envMultiplier` is the HUD-exposed
+            scalar so users can dial the overall reflection brightness
+            at runtime. */}
+        <MaterialReflectionCubemapSystem
+          rootsVersion={roots}
+          envMultiplier={envIntensityMultiplier ?? 1}
+        />
+        <GlobalSelectionHighlight />
+      </ReflectionProbeRegistryProvider>
     </SceneContext.Provider>
   );
 }
 
 /** Convenience helper that accepts the whole SceneJson — matches the
  *  Unity-export pipeline's `<UnityExportRoots scene={...} />` ergonomics. */
-export function SceneRootsFromScene({ scene }: { scene: SceneJson }) {
+export function SceneRootsFromScene({
+  scene,
+  envIntensityMultiplier,
+}: {
+  scene: SceneJson;
+  envIntensityMultiplier?: number;
+}) {
   return (
     <SceneRoots
       roots={scene.roots}
@@ -373,6 +428,7 @@ export function SceneRootsFromScene({ scene }: { scene: SceneJson }) {
       fbxExternalMaterials={scene.fbxExternalMaterials}
       materialNameIndex={scene.materialNameIndex}
       renderSettings={scene.renderSettings}
+      envIntensityMultiplier={envIntensityMultiplier}
     />
   );
 }
@@ -471,6 +527,207 @@ function BaselineLights({ settings }: { settings?: SceneRenderSettings }) {
       <hemisphereLight args={[hemi.sky, hemi.ground, hemi.intensity]} />
     </>
   );
+}
+
+// ---------------------------------------------------------------- Environment / IBL ----
+
+/**
+ * Scene-level IBL source. Drives `scene.environment` and optionally
+ * `scene.background` so `MeshStandardMaterial` surfaces have something
+ * to reflect and skies show through to the camera.
+ *
+ * Resolution order (closely mirrors Unity's Environment Lighting panel):
+ *
+ *   1. `skybox` is defined — load the authored skybox (cubemap /
+ *      panoramic / six-sided), PMREM it, and use that for both
+ *      `scene.environment` and `scene.background`. This is the full-
+ *      fidelity path.
+ *   2. No skybox, but the scene's `ambientMode === 'Skybox'` — the
+ *      author asked for skybox-driven ambient but the actual material
+ *      didn't load (LFS still fetching, or shader not recognised).
+ *      Install a neutral `RoomEnvironment` PMREM as a temporary
+ *      stand-in so metallic surfaces don't read as pitch-black
+ *      mid-load. Background stays on the clear colour.
+ *   3. Otherwise (`Flat` / `Trilight` / `Custom` ambient mode) — the
+ *      author EXPLICITLY doesn't want skybox-driven IBL. We skip
+ *      environment injection entirely, matching Unity's behaviour of
+ *      relying purely on baked ambient + direct lights. This is the
+ *      right answer for ProBuilder / greyblock test scenes where
+ *      RoomEnvironment's default 1.0 intensity would otherwise
+ *      massively overbrighten the render.
+ *
+ * `scene.environmentIntensity` is scaled by Unity's `m_IndirectIntensity`
+ * in all cases so a scene with `IndirectIntensity=0` effectively gets
+ * direct-light-only rendering even when it has a skybox.
+ */
+interface EnvRootProps {
+  skybox?: SkyboxJson;
+  ambientMode?: SceneRenderSettings['ambientMode'];
+  indirectIntensity?: number;
+  /** HUD-controllable override multiplier. Users may dial the IBL
+   *  contribution down/up at runtime without editing the scene. */
+  intensityMultiplier: number;
+}
+
+function EnvironmentRoot({
+  skybox,
+  ambientMode,
+  indirectIntensity,
+  intensityMultiplier,
+}: EnvRootProps) {
+  const { scene, gl } = useThree();
+
+  // Decide whether ANY IBL should be injected. Skipping environment
+  // entirely when the scene author didn't ask for skybox-based IBL
+  // is the single biggest fix for "mood too bright" — RoomEnvironment
+  // is effectively a studio HDRI and will overwhelm any ProBuilder /
+  // greyblock scene that Unity renders with a flat ambient colour.
+  const wantsIbl = !!skybox || ambientMode === 'Skybox';
+
+  useEffect(() => {
+    if (!wantsIbl) {
+      const prevEnv = scene.environment;
+      const prevBg = scene.background;
+      scene.environment = null;
+      return () => {
+        scene.environment = prevEnv;
+        scene.background = prevBg;
+      };
+    }
+
+    const pmrem = new THREE.PMREMGenerator(gl);
+    pmrem.compileEquirectangularShader();
+    pmrem.compileCubemapShader();
+
+    const prevEnv = scene.environment;
+    const prevBg = scene.background;
+
+    let fallbackEnvTex: THREE.Texture | null = null;
+    let currentEnvTex: THREE.Texture | null = null;
+    let currentBgTex: THREE.Texture | null = null;
+    let cancelled = false;
+
+    const swap = (nextEnv: THREE.Texture, nextBg: THREE.Texture | null) => {
+      if (cancelled) {
+        nextEnv.dispose();
+        if (nextBg && nextBg !== nextEnv) nextBg.dispose();
+        return;
+      }
+      const oldEnv = currentEnvTex;
+      const oldBg = currentBgTex;
+      currentEnvTex = nextEnv;
+      currentBgTex = nextBg;
+      scene.environment = nextEnv;
+      if (nextBg) scene.background = nextBg;
+      if (oldEnv && oldEnv !== fallbackEnvTex) oldEnv.dispose();
+      if (oldBg && oldBg !== oldEnv) oldBg.dispose();
+      if (fallbackEnvTex && oldEnv === fallbackEnvTex) {
+        fallbackEnvTex.dispose();
+        fallbackEnvTex = null;
+      } else if (fallbackEnvTex && currentEnvTex !== fallbackEnvTex) {
+        fallbackEnvTex.dispose();
+        fallbackEnvTex = null;
+      }
+    };
+
+    // Seed with the neutral RoomEnvironment so metals get SOMETHING to
+    // reflect while the skybox texture is still loading. When a real
+    // skybox swap arrives, `swap()` disposes this immediately.
+    {
+      const roomScene = new RoomEnvironment();
+      fallbackEnvTex = pmrem.fromScene(roomScene, 0.04).texture;
+      currentEnvTex = fallbackEnvTex;
+      scene.environment = fallbackEnvTex;
+    }
+
+    const loadEquirect = (url: string) => {
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin('anonymous');
+      loader.load(
+        url,
+        (tex) => {
+          if (cancelled) {
+            tex.dispose();
+            return;
+          }
+          tex.mapping = THREE.EquirectangularReflectionMapping;
+          tex.colorSpace = THREE.SRGBColorSpace;
+          const envRt = pmrem.fromEquirectangular(tex);
+          swap(envRt.texture, tex);
+        },
+        undefined,
+        (err) => {
+          // eslint-disable-next-line no-console
+          console.warn(`[env] equirect skybox failed: ${String(err)}`);
+        },
+      );
+    };
+
+    const loadSixSided = (guids: SkyboxJson['sixSidedGuids']) => {
+      if (!guids) return;
+      const [front, back, left, right, up, down] = guids;
+      const urls = [right, left, up, down, front, back].map((g) =>
+        g ? textureUrl(g) : null,
+      );
+      if (urls.some((u) => !u)) return;
+      const loader = new THREE.CubeTextureLoader();
+      loader.setCrossOrigin('anonymous');
+      loader.load(
+        urls as string[],
+        (tex) => {
+          if (cancelled) {
+            tex.dispose();
+            return;
+          }
+          tex.colorSpace = THREE.SRGBColorSpace;
+          const envRt = pmrem.fromCubemap(tex);
+          swap(envRt.texture, tex);
+        },
+        undefined,
+        (err) => {
+          // eslint-disable-next-line no-console
+          console.warn(`[env] six-sided skybox failed: ${String(err)}`);
+        },
+      );
+    };
+
+    if (skybox) {
+      if (skybox.kind === 'cubemap' && skybox.cubemapGuid) {
+        loadEquirect(textureUrl(skybox.cubemapGuid));
+      } else if (skybox.kind === 'panoramic' && skybox.panoramicGuid) {
+        loadEquirect(textureUrl(skybox.panoramicGuid));
+      } else if (skybox.kind === 'sixsided') {
+        loadSixSided(skybox.sixSidedGuids);
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      if (scene.environment === currentEnvTex) scene.environment = prevEnv;
+      if (scene.background === currentBgTex) scene.background = prevBg;
+      if (fallbackEnvTex) fallbackEnvTex.dispose();
+      if (currentEnvTex && currentEnvTex !== fallbackEnvTex) currentEnvTex.dispose();
+      if (currentBgTex && currentBgTex !== currentEnvTex) currentBgTex.dispose();
+      pmrem.dispose();
+    };
+  }, [gl, scene, skybox, wantsIbl]);
+
+  // Intensity: respect Unity's `m_IndirectIntensity` (default 1.0) but
+  // scale it further down when we're on the RoomEnvironment fallback,
+  // because RoomEnvironment's HDR studio setup is noticeably brighter
+  // than a typical Unity skybox. The HUD multiplier lets the user
+  // dial this at runtime.
+  useEffect(() => {
+    const prev = scene.environmentIntensity ?? 1;
+    const base = typeof indirectIntensity === 'number' ? indirectIntensity : 1;
+    const fallbackFactor = skybox ? 1.0 : 0.35;
+    scene.environmentIntensity = base * fallbackFactor * intensityMultiplier;
+    return () => {
+      scene.environmentIntensity = prev;
+    };
+  }, [scene, indirectIntensity, skybox, intensityMultiplier]);
+
+  return null;
 }
 
 // ---------------------------------------------------------------- Node tree ----
@@ -734,10 +991,45 @@ function SceneNode({ node }: { node: GameObjectNode }) {
         )
       )}
       {node.light && <NodeLight light={node.light} fileID={node.fileID} />}
+      {node.reflectionProbe && (
+        <NodeReflectionProbe probe={node.reflectionProbe} fileID={node.fileID} />
+      )}
       {node.children.map((child, idx) => (
         <SceneNode key={`${child.fileID}_${idx}`} node={child} />
       ))}
     </group>
+  );
+}
+
+/**
+ * Mount-only probe anchor. Creates a sub-group at the probe's local
+ * offset so `getWorldPosition` reads the probe centre (not the
+ * GameObject origin) when the applicator resolves nearest-probe per
+ * mesh. The actual envMap assignment happens inside
+ * `ReflectionProbeSystem` at scene level.
+ */
+function NodeReflectionProbe({
+  probe,
+  fileID,
+}: {
+  probe: NonNullable<GameObjectNode['reflectionProbe']>;
+  fileID: string;
+}) {
+  const anchorRef = useRegisterReflectionProbe(fileID, {
+    mode: probe.mode as ProbeMode,
+    boxSize: probe.boxSize,
+    boxOffset: probe.boxOffset,
+    boxProjection: probe.boxProjection,
+    intensity: probe.intensity,
+    importance: probe.importance,
+    customBakedTextureGuid: probe.customBakedTextureGuid,
+  });
+  return (
+    <group
+      ref={anchorRef}
+      position={probe.boxOffset as [number, number, number]}
+      userData={{ reflectionProbeFileID: fileID, noCollide: true }}
+    />
   );
 }
 
@@ -1355,19 +1647,39 @@ function MultiMeshRendererProxy({
   // offsets would visibly displace single-mesh props from the scene
   // position authored in Unity. Only when the FBX has genuinely multiple
   // meshes (F_Sample) do we need per-sub-mesh placement.
+  // Per-sub-mesh Transform overrides authored at scene level against the
+  // model-prefab instance. Server resolves these from
+  // `m_Modifications` targeting internal FBX Transform fileIDs (via the
+  // `.meta` name table) and hands us a map keyed by the FBX sub-object
+  // name. When present, we USE the override for position/quaternion/
+  // scale and leave the FBX-derived values on the floor — Unity's
+  // authoring semantics are "the scene wrote an authoritative local
+  // transform on this sub-object", so we must not blend with the FBX
+  // defaults. Example: Factory_New_B's LT_FactoryCon_A.009 has a 90°
+  // Z-axis rotation authored at scene level; without this lookup every
+  // such piece renders at the FBX-default orientation (180° off).
+  const subOverrides = renderer.subMeshOverrides;
   const meshes = visibleMeshes.map(({ rec: record, origIdx }, visibleIdx) => {
     const row = builtMaterials[origIdx];
     if (!row || row.length === 0) return null;
     const materialProp: THREE.Material | THREE.Material[] =
       row.length === 1 ? row[0] : row;
-    // Slot-bindings are meant for the FIRST mesh actually rendered (the
-    // one the Inspector can pick). After filtering we anchor them to the
-    // first VISIBLE record so the Inspector keeps working even when the
-    // original `allMeshes[0]` was pruned.
     const slotBindings = visibleIdx === 0 ? firstRecordBindings : undefined;
-    if (isSingleMesh) {
+    const override = subOverrides?.[record.meshName];
+    const posVec: [number, number, number] = override?.position
+      ? override.position
+      : record.localPosition;
+    const scaleVec: [number, number, number] = override?.scale
+      ? override.scale
+      : record.localScale;
+    const quatVec = override?.quaternion;
+
+    if (isSingleMesh && !override) {
       // No localPosition/localScale wrapper; matches the single-mesh
-      // RendererProxy's output structure modulo material-source.
+      // RendererProxy's output structure modulo material-source. Only
+      // safe to short-circuit here when there's NO override — if the
+      // scene authored a per-sub-mesh transform, we still need a wrapper
+      // group to carry it.
       return (
         <mesh
           key={`fbx-sub-${origIdx}`}
@@ -1385,8 +1697,9 @@ function MultiMeshRendererProxy({
         // original index to keep React's reconciliation stable across
         // filter changes.
         key={`fbx-sub-${origIdx}`}
-        position={record.localPosition}
-        scale={record.localScale}
+        position={posVec}
+        scale={scaleVec}
+        quaternion={quatVec}
         name={record.meshName || `submesh_${origIdx}`}
       >
         <mesh
@@ -2048,16 +2361,6 @@ export function buildMaterial(
     }
     return m;
   }
-  // TEMP DEBUG: log every material that actually gets built so we can cross-
-  // reference a "white" mesh in the viewer against the shader path, colour,
-  // and base map guid that produced it. Emits once per name (build is called
-  // per-instance but materials are cached upstream in materialList useMemo,
-  // which dedupes per-scene-render).
-  // eslint-disable-next-line no-console
-  console.warn(
-    `[buildMat] ${src.name} kind=${src.shaderKind} color=(${src.baseColor[0].toFixed(2)},${src.baseColor[1].toFixed(2)},${src.baseColor[2].toFixed(2)},${src.baseColor[3].toFixed(2)}) em=(${src.emissionColor[0].toFixed(2)},${src.emissionColor[1].toFixed(2)},${src.emissionColor[2].toFixed(2)}) baseMap=${src.baseMapGuid?.slice(0, 8) ?? 'none'} tile=${tiling ? `(${tiling[0]},${tiling[1]})` : '1,1'} off=${offset ? `(${offset[0]},${offset[1]})` : '0,0'}`,
-  );
-
   if (src.shaderKind === 'unlit') {
     const m = new THREE.MeshBasicMaterial({
       color: baseColor,
@@ -2091,11 +2394,6 @@ export function buildMaterial(
 
   if (src.baseMapGuid) {
     m.map = getCachedTexture(src.baseMapGuid, { srgb: true, tiling, offset, flipY });
-  } else {
-    // TEMP DEBUG: materials that reach lit-path without a base map render
-    // with a tinted warning colour so we can distinguish "resolved but
-    // textureless" from "texture failed to bind". Uses a cool cyan.
-    m.color = new THREE.Color(0, 1, 1);
   }
   if (src.normalMapGuid) {
     m.normalMap = getCachedTexture(src.normalMapGuid, { srgb: false, tiling, offset, flipY });
@@ -2103,10 +2401,12 @@ export function buildMaterial(
     m.normalScale = new THREE.Vector2(s, s);
   }
   if (src.metallicGlossMapGuid) {
-    // URP packs metallic/smoothness into a single RGBA texture. Three reads
-    // metalness from B and roughness from G; we assign to both slots so the
-    // usual URP Lit authoring (metallic in R, smoothness in A) approximates
-    // correctly on the final pixel.
+    // Bind the metallicGloss texture to both slots so three enables
+    // USE_METALNESSMAP + USE_ROUGHNESSMAP defines. The URP channel
+    // layout (metallic in .r, smoothness in .a) doesn't match three's
+    // default sampling (.b for metalness, .g for roughness) — the
+    // onBeforeCompile patch below re-routes the samples to the right
+    // channels.
     const tex = getCachedTexture(src.metallicGlossMapGuid, { srgb: false, tiling, offset, flipY });
     m.metalnessMap = tex;
     m.roughnessMap = tex;
@@ -2117,6 +2417,37 @@ export function buildMaterial(
   }
   if (src.emissionMapGuid) {
     m.emissiveMap = getCachedTexture(src.emissionMapGuid, { srgb: true, tiling, offset, flipY });
+  }
+
+  const detailAlbedoTex = src.detailAlbedoMapGuid
+    ? getCachedTexture(src.detailAlbedoMapGuid, { srgb: true, flipY })
+    : undefined;
+  const detailNormalTex = src.detailNormalMapGuid
+    ? getCachedTexture(src.detailNormalMapGuid, { srgb: false, flipY })
+    : undefined;
+
+  applyUrpMaterialPatch(m, {
+    smoothnessFromAlbedoAlpha: src.smoothnessFromAlbedoAlpha,
+    detailAlbedoMap: detailAlbedoTex,
+    detailNormalMap: detailNormalTex,
+    detailAlbedoScale: src.detailAlbedoScale,
+    detailNormalScale: src.detailNormalScale,
+  });
+
+  // Per-material reflection cubemap (Aegis/BasicLit._EnvCubemap). We
+  // only stash the intent here — PMREM filtering requires the
+  // WebGLRenderer and happens later in
+  // `MaterialReflectionCubemapSystem` which runs inside R3F. Without
+  // this binding, every material falls back to the scene envMap (or
+  // nothing) and reflection-heavy scenes lose their asset-authored
+  // look entirely.
+  if (src.reflectionCubemapGuid && src.useReflection) {
+    setReflectionCubemapUserData(m, {
+      guid: src.reflectionCubemapGuid,
+      intensity: src.reflectionIntensity,
+      roughnessDistortion: src.roughnessDistortion,
+      useReflection: src.useReflection,
+    });
   }
 
   return m;
@@ -2287,16 +2618,17 @@ export function buildDebugUvMaterials(slotCount: number, doubleSidedHint: boolea
 }
 
 function buildFallbackMaterial(
-  _color: [number, number, number, number],
+  color: [number, number, number, number],
   _textureGuid: string | undefined,
   doubleSidedHint: boolean,
 ): THREE.Material {
-  // TEMP DEBUG: bright magenta fallback. If the scene looks magenta-heavy
-  // we know the name-based resolver is failing to bind submeshes; if the
-  // scene looks right, the new code path is live and we can restore the
-  // original tinted fallback.
+  // Conservative "plastic" look for materials we couldn't resolve.
+  // Using the authored base colour (when the server surfaced one)
+  // instead of a hard-coded debug magenta keeps unresolved-material
+  // surfaces from screaming in the viewport while still being
+  // distinguishable by their universal lack of metallic/spec response.
   return new THREE.MeshStandardMaterial({
-    color: new THREE.Color(1, 0, 1),
+    color: new THREE.Color(color[0], color[1], color[2]),
     roughness: 0.8,
     metalness: 0,
     side: doubleSidedHint ? THREE.DoubleSide : THREE.FrontSide,

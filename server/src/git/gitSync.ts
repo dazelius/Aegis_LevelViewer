@@ -368,14 +368,39 @@ async function runLfsFetchBatch(
 }
 
 async function fetchLfsAssets(targetDir: string): Promise<void> {
-  // Fully skip LFS fetch when AEGISGRAM_FORCE_LIVE is set — lazyLfs.ts
-  // handles both text (.unity / .mat / .prefab) and binary assets on
-  // demand at request time, so there's no benefit to a bulk pull at
-  // startup/sync. This is the fast path for warm restarts: the repo is
-  // already on disk, the compiled indexes cover everything we need,
-  // and any pointer file gets materialised when its scene is opened.
+  // Fully skip the *network* LFS fetch when AEGISGRAM_FORCE_LIVE is set —
+  // lazyLfs.ts handles NEW downloads on demand. BUT we still have to run
+  // a local smudge pass here, because `pullSparse`'s `reset --hard` runs
+  // with `GIT_LFS_SKIP_SMUDGE=1` and rewrites every changed path (and a
+  // re-applied sparse-checkout can rewrite the whole tree) as raw 130-
+  // byte pointer text. Without a smudge, even files whose blobs are
+  // already sitting in `.git/lfs/objects/` from a prior session come
+  // back as pointers on the working tree, lazyLfs then triggers a
+  // BRAND-NEW `git lfs fetch` over HTTP for each one — and the deploy
+  // user sees "every file gets re-downloaded on restart" even though
+  // the bits are right there on disk.
+  //
+  // `git lfs checkout` (with no args) only reads the local object
+  // store; missing blobs are left as pointers (no error, no network
+  // request). That makes it safe to always run — it's network-free and
+  // only writes real bytes for files already cached. Measured cost on
+  // the Aegis repo is ~2 s for a fully-cached tree, vs. minutes when
+  // the alternative is N re-downloads serialised through the coalescer.
   if ((process.env.AEGISGRAM_FORCE_LIVE || '').toLowerCase() === 'true') {
-    console.log('[gitSync] AEGISGRAM_FORCE_LIVE=true — skipping bulk LFS fetch (lazy LFS covers on-demand)');
+    console.log(
+      '[gitSync] AEGISGRAM_FORCE_LIVE=true — skipping network LFS fetch; running local smudge pass',
+    );
+    try {
+      const lfsGit = simpleGit(targetDir).env({
+        GIT_TERMINAL_PROMPT: '0',
+      } as Record<string, string>);
+      attachGitStreamLogger(lfsGit);
+      await lfsGit.raw(['lfs', 'checkout']);
+      console.log('[gitSync] local lfs checkout done (restored already-cached blobs)');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[gitSync] local lfs checkout warning (non-fatal): ${msg.split(/\r?\n/)[0]}`);
+    }
     return;
   }
 

@@ -1,5 +1,6 @@
 import type { RawDoc } from './sceneParser.js';
 import { unityColorToRgba } from './coordTransform.js';
+import type { SkyboxJson } from './skyboxParser.js';
 
 /** Unity classId for the scene-level `RenderSettings` document. */
 const CLASS_RENDER_SETTINGS = 104;
@@ -43,6 +44,11 @@ export interface SceneRenderSettings {
   /** Skybox material guid (if present). The client may look it up in the
    *  materials table for future skybox support. */
   skyboxMaterialGuid?: string;
+  /** Decoded skybox material — shader kind (cubemap / six-sided /
+   *  panoramic / procedural) plus the relevant texture GUIDs + tint /
+   *  exposure / rotation parameters. Populated asynchronously by
+   *  `sceneParser` after the main scene parse. */
+  skybox?: SkyboxJson;
 }
 
 function readNum(obj: Record<string, unknown> | undefined, key: string, fallback: number): number {

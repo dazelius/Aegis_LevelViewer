@@ -4,12 +4,12 @@ import type { Server } from 'node:http';
 import type { Feedback } from '../feedback/feedbackStore.js';
 
 /**
- * Lightweight presence / chat / feedback-event hub.
+ * Lightweight presence / feedback-event hub.
  *
  * One WebSocket per tab. Each client "joins" a room keyed by the
  * Unity scene path it's currently viewing; the hub relays pose
- * updates, chat messages, and feedback mutation events to every
- * other client in the same room.
+ * updates and feedback mutation events to every other client in
+ * the same room.
  *
  * The hub is *stateless about game logic*: it does not validate
  * positions, it does not run physics, it doesn't even guarantee
@@ -43,7 +43,6 @@ type ClientMsg =
   | { type: 'hello'; nickname: string; scenePath: string }
   | { type: 'scene'; scenePath: string }
   | { type: 'pose'; pose: PeerPose }
-  | { type: 'chat'; text: string }
   | { type: 'ping' };
 
 /** Pose frame — what every viewer broadcasts each tick. `visible`
@@ -68,7 +67,6 @@ type ServerMsg =
   | { type: 'peer_join'; id: string; nickname: string }
   | { type: 'peer_leave'; id: string }
   | { type: 'peer_pose'; id: string; pose: PeerPose }
-  | { type: 'peer_chat'; id: string; nickname: string; text: string; ts: number }
   | { type: 'feedback_added'; feedback: Feedback }
   | { type: 'feedback_updated'; feedback: Feedback }
   | { type: 'feedback_removed'; scenePath: string; id: string }
@@ -187,9 +185,6 @@ function dispatch(client: Client, msg: ClientMsg): void {
     case 'pose':
       onPose(client, msg.pose);
       return;
-    case 'chat':
-      onChat(client, msg.text);
-      return;
     case 'ping':
       sendTo(client, { type: 'pong' });
       return;
@@ -223,26 +218,6 @@ function onPose(client: Client, pose: PeerPose): void {
     client.scenePath,
     { type: 'peer_pose', id: client.id, pose: safe },
     client.id,
-  );
-}
-
-function onChat(client: Client, textRaw: unknown): void {
-  if (!client.scenePath) return;
-  const text = typeof textRaw === 'string' ? textRaw.slice(0, 500).trim() : '';
-  if (!text) return;
-  broadcastToRoom(
-    client.scenePath,
-    {
-      type: 'peer_chat',
-      id: client.id,
-      nickname: client.nickname,
-      text,
-      ts: Date.now(),
-    },
-    // include the sender so their own chat bubble appears in-line
-    // with remote messages (single-source-of-truth for timestamp /
-    // ordering); the client can de-dupe by id === self.
-    null,
   );
 }
 
@@ -345,7 +320,7 @@ function broadcastToRoom(scenePath: string, msg: ServerMsg, excludeId: string | 
 function sanitizeNickname(x: unknown): string {
   if (typeof x !== 'string') return 'Guest';
   // Collapse whitespace, strip control chars, cap to 24 chars. Empty →
-  // "Guest" so chat bubbles always have something to render.
+  // "Guest" so peer badges always have something to render.
   const trimmed = x.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24);
   return trimmed || 'Guest';
 }

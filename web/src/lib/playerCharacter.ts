@@ -138,17 +138,32 @@ const fbxLoader = new FBXLoader();
  */
 async function fetchFbxGroup(guid: string): Promise<THREE.Group> {
   const url = apiUrl(`/api/assets/mesh?guid=${encodeURIComponent(guid)}`);
-  // Retry on 409 (server-side LFS fetch still in flight) with linear
-  // backoff. Matches the fbxCache.ts strategy — on a freshly-deployed
-  // platform, lazy LFS pulls the blob within a few seconds of the
-  // scene opening, and without the retry the very first character
-  // model fails permanently and falls back to a capsule.
+  // Retry while the server signals "LFS fetch still in flight" —
+  // either the legacy `409 lfs-pointer` (older servers) or
+  // `200 + {status:'pending',...}` JSON (current servers; switched
+  // to 200 so platform reverse proxies don't count cold-open retry
+  // loops as errors). On a freshly-deployed platform, lazy LFS pulls
+  // the blob within a few seconds of the scene opening, and without
+  // the retry the very first character model fails permanently and
+  // falls back to a capsule.
   const MAX_LFS_RETRIES = 6;
   const LFS_RETRY_MS = 2500;
   let res: Response | null = null;
   for (let attempt = 0; attempt <= MAX_LFS_RETRIES; attempt += 1) {
     res = await fetch(url);
-    if (res.status !== 409) break;
+    let pending = res.status === 409;
+    if (!pending && res.ok) {
+      const ct = res.headers.get('Content-Type') || '';
+      if (ct.startsWith('application/json')) {
+        try {
+          const body = (await res.clone().json()) as { status?: unknown };
+          if (body && body.status === 'pending') pending = true;
+        } catch {
+          /* not the sentinel */
+        }
+      }
+    }
+    if (!pending) break;
     if (attempt === MAX_LFS_RETRIES) break;
     await new Promise<void>((r) => setTimeout(r, LFS_RETRY_MS));
   }
@@ -157,6 +172,14 @@ async function fetchFbxGroup(guid: string): Promise<THREE.Group> {
     throw new Error(
       `fetch FBX ${guid} failed: ${res?.status ?? 0} ${res?.statusText ?? 'no response'} ${body}`,
     );
+  }
+  // Final response might still be the JSON 'pending' sentinel if we
+  // exhausted the retry budget — surface as a clear error rather
+  // than passing the JSON bytes to FBXLoader.
+  const finalCt = res.headers.get('Content-Type') || '';
+  if (finalCt.startsWith('application/json')) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`fetch FBX ${guid} pending: ${body}`);
   }
   const buf = await res.arrayBuffer();
   // `parse` takes the raw buffer + a base path for external texture

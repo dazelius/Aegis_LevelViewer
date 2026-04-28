@@ -293,6 +293,25 @@ body.play-mode .app-header { display: none; }
   border-color: #4a6a96;
   color: #e6eefb;
 }
+.hud-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #2d3442;
+  background: #181d27;
+  color: #c7cfdc;
+}
+.hud-slider span {
+  min-width: 58px;
+  font-variant-numeric: tabular-nums;
+}
+.hud-slider input[type="range"] {
+  width: 86px;
+  accent-color: #4a6a96;
+}
 /* --- Play mode (service-style, NOT a debug toggle) ------------------
  * Separate from `.hud-toggle` so it stays the visual headline of the
  * viewer page. FAB lives in the bottom-right corner, status strip lives
@@ -1308,166 +1327,6 @@ body.play-mode .app-header { display: none; }
   font: inherit;
   min-width: 80px;
   max-width: 200px;
-}
-
-/* ===================================================================
- * Multiplayer chat HUD — bottom-left overlay, collapsed by default.
- * Positioned `absolute` inside .viewer-root so it never participates
- * in document flow; its width comes from its own content cap.
- * =================================================================*/
-.chat-hud {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  width: 320px;
-  max-width: calc(100vw - 32px);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: rgba(11, 13, 17, 0.72);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border: 1px solid rgba(138, 183, 255, 0.18);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12px;
-  color: #cfd6e4;
-  pointer-events: auto;
-  z-index: 40;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  user-select: none;
-}
-.chat-hud.expanded {
-  width: 400px;
-  max-width: calc(100vw - 32px);
-  max-height: 60vh;
-  user-select: text;
-}
-.chat-hud-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.chat-hud-presence {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  color: #e8ecf1;
-}
-.chat-hud-presence-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 6px rgba(74, 222, 128, 0.8);
-  animation: chat-hud-presence-pulse 2s ease-in-out infinite;
-}
-@keyframes chat-hud-presence-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
-}
-.chat-hud-hint {
-  font-size: 11px;
-}
-.chat-hud-log {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-  padding-right: 2px;
-  /* When collapsed the tail is capped so the HUD stays small; when
-     expanded we let it grow up to the container's max-height. */
-  max-height: 64px;
-}
-.chat-hud.expanded .chat-hud-log {
-  max-height: calc(60vh - 90px);
-  min-height: 120px;
-}
-.chat-hud-empty {
-  font-size: 12px;
-  padding: 12px 4px;
-  text-align: center;
-}
-.chat-hud-line {
-  line-height: 1.35;
-  word-break: break-word;
-}
-.chat-hud-line.self .chat-hud-who {
-  color: #8ab7ff;
-}
-.chat-hud-line.system .chat-hud-text {
-  color: #7e8599;
-  font-style: italic;
-}
-.chat-hud-who {
-  font-weight: 600;
-  color: #c4a6ff;
-  margin-right: 6px;
-}
-.chat-hud-text {
-  color: #e8ecf1;
-}
-.chat-hud-form {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(138, 183, 255, 0.1);
-}
-.chat-hud-me {
-  font-weight: 600;
-  color: #8ab7ff;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-}
-.chat-hud-input {
-  flex: 1 1 auto;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(138, 183, 255, 0.25);
-  border-radius: 6px;
-  padding: 6px 8px;
-  color: #e8ecf1;
-  font: inherit;
-  font-size: 13px;
-  outline: none;
-}
-.chat-hud-input:focus {
-  border-color: rgba(138, 183, 255, 0.6);
-  background: rgba(255, 255, 255, 0.08);
-}
-.chat-hud-send {
-  background: linear-gradient(90deg, #3f74d9, #6a53d6);
-  border: 0;
-  color: #fff;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 12px;
-  cursor: pointer;
-}
-.chat-hud-send:hover {
-  filter: brightness(1.1);
-}
-.chat-hud-open {
-  align-self: flex-end;
-  background: transparent;
-  border: 1px solid rgba(138, 183, 255, 0.35);
-  color: #cfd6e4;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-}
-.chat-hud-open:hover {
-  background: rgba(138, 183, 255, 0.12);
-  border-color: rgba(138, 183, 255, 0.6);
 }
 
 /* ===================================================================

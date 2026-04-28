@@ -15,6 +15,7 @@ import { parseMaterialByGuid, type ParsedMaterial } from './materialParser.js';
 import { getFbxMeshInfo, resolveFbxMeshName } from './metaParser.js';
 import { parseInlineMesh, type InlineMeshData } from './inlineMeshParser.js';
 import { extractRenderSettings, type SceneRenderSettings } from './renderSettingsParser.js';
+import { parseSkyboxByGuid } from './skyboxParser.js';
 import {
   ensureLfsFile,
   isLfsPointerBuf,
@@ -32,6 +33,7 @@ const CLASS_MESH = 43;
 const CLASS_LIGHT = 108;
 const CLASS_RECT_TRANSFORM = 224;
 const CLASS_SKINNED_MESH_RENDERER = 137;
+const CLASS_REFLECTION_PROBE = 215;
 const CLASS_PREFAB_INSTANCE = 1001;
 
 /** A file reference in Unity YAML: `{fileID: 123, guid: abc, type: 2}` */
@@ -133,6 +135,11 @@ export interface MaterialJson {
   metallic: number;
   smoothness: number;
   metallicGlossMapGuid: string | null;
+  /** Whether smoothness should be sampled from the metallic texture's
+   *  alpha channel (URP default) or the base map's alpha channel
+   *  (`_SmoothnessTextureChannel = 1`). Client picks UV source
+   *  accordingly in its shader patch. */
+  smoothnessFromAlbedoAlpha: boolean;
 
   occlusionMapGuid: string | null;
   occlusionStrength: number;
@@ -140,9 +147,40 @@ export interface MaterialJson {
   emissionColor: [number, number, number];
   emissionMapGuid: string | null;
 
+  /** URP detail overlay. Client multiplies this onto the base colour
+   *  at 2x UV scale to recover close-range surface variation without
+   *  baking separate high-frequency base maps. */
+  detailAlbedoMapGuid: string | null;
+  /** Detail normal map, blended with the primary normal. */
+  detailNormalMapGuid: string | null;
+  /** Height/parallax map. Used as a bump displacement hint only —
+   *  no true parallax sampling. */
+  heightMapGuid: string | null;
+  detailAlbedoScale: number;
+  detailNormalScale: number;
+  heightScale: number;
+
   renderMode: 'Opaque' | 'Cutout' | 'Transparent' | 'Fade';
   alphaCutoff: number;
   doubleSided: boolean;
+
+  /** Per-material reflection cubemap GUID (Aegis/BasicLit._EnvCubemap and
+   *  friends). When present the client loads this texture, PMREM-filters
+   *  it, and binds it as `material.envMap` so the asset-authored
+   *  reflections render even in scenes without a Unity ReflectionProbe
+   *  anywhere near. Null when the material doesn't author one. */
+  reflectionCubemapGuid: string | null;
+  /** `_ReflectionIntensity`. Directly mapped to
+   *  `material.envMapIntensity` on the client. */
+  reflectionIntensity: number;
+  /** `_RoughnessDistortion`. Client biases roughness by this amount when
+   *  sampling the env map so higher values produce blurrier reflections. */
+  roughnessDistortion: number;
+  /** True when either the `_UseReflection` float is 1 OR the
+   *  `_USE_REFLECTION` keyword is in `m_ValidKeywords`. Lets the client
+   *  skip env map binding on materials that authored a cube slot but
+   *  turned reflections off. */
+  useReflection: boolean;
 }
 
 /** Convert a server-side `ParsedMaterial` to the wire format sent to the client. */
@@ -170,6 +208,7 @@ export function toMaterialJson(p: ParsedMaterial): MaterialJson {
     metallic: p.metallic,
     smoothness: p.smoothness,
     metallicGlossMapGuid: p.metallicGlossMap?.guid ?? null,
+    smoothnessFromAlbedoAlpha: p.smoothnessSource === 'albedoAlpha',
 
     occlusionMapGuid: p.occlusionMap?.guid ?? null,
     occlusionStrength: p.occlusionStrength,
@@ -177,9 +216,21 @@ export function toMaterialJson(p: ParsedMaterial): MaterialJson {
     emissionColor: p.emissionColor,
     emissionMapGuid: p.emissionMap?.guid ?? null,
 
+    detailAlbedoMapGuid: p.detailAlbedoMap?.guid ?? null,
+    detailNormalMapGuid: p.detailNormalMap?.guid ?? null,
+    heightMapGuid: p.heightMap?.guid ?? null,
+    detailAlbedoScale: p.detailAlbedoScale,
+    detailNormalScale: p.detailNormalScale,
+    heightScale: p.heightScale,
+
     renderMode: p.renderMode,
     alphaCutoff: p.alphaCutoff,
     doubleSided,
+
+    reflectionCubemapGuid: p.reflectionCubemap?.guid ?? null,
+    reflectionIntensity: p.reflectionIntensity,
+    roughnessDistortion: p.roughnessDistortion,
+    useReflection: p.useReflection,
   };
 }
 
@@ -286,6 +337,26 @@ export interface GameObjectNode {
      *  `DesertMine::DM_EV_A` render every sub-object in `DM_EV_A.fbx`
      *  instead of the single sub-mesh the scene actually wants to show. */
     removedFbxSubmeshNames?: string[];
+    /** Per-sub-object Transform overrides authored at scene level against
+     *  a model-prefab instance (only meaningful when
+     *  `renderAllFbxMeshes` is true). Key is the FBX sub-object name
+     *  (exactly what FBXLoader surfaces as `Object3D.name` on the sub-
+     *  mesh), resolved from `m_Modifications` target fileIDs via the
+     *  FBX `.meta` name table. Values are ALREADY in three's coordinate
+     *  space: position has `x` negated, quaternion has `y`/`z` negated.
+     *
+     *  Factory_New_B is the motivating case — the scene keeps the model
+     *  prefab body intact but rotates ~20 sub-transforms via
+     *  `m_LocalRotation` entries targeting internal Transform fileIDs.
+     *  Without this field the sub-renderer pass drops those mods and
+     *  every affected piece (e.g. `LT_FactoryCon_A.009`) renders at its
+     *  FBX-default orientation — which is the `180° off` the user
+     *  reported. */
+    subMeshOverrides?: Record<string, {
+      position?: Vec3;
+      quaternion?: Quat;
+      scale?: Vec3;
+    }>;
   };
   light?: {
     type: 'Directional' | 'Point' | 'Spot' | 'Area' | 'Unknown';
@@ -298,6 +369,43 @@ export interface GameObjectNode {
     fov: number;
     near: number;
     far: number;
+  };
+  /**
+   * Reflection Probe (Unity classId 215). Drives localised IBL for
+   * surfaces inside the probe's influence volume — e.g. a chrome prop
+   * reflecting the warehouse interior instead of the outdoor sky.
+   *
+   * We intentionally omit the world-space position here and let the
+   * client compute it at render time via `Object3D.getWorldPosition`,
+   * because probes are authored as child GameObjects whose transform
+   * chain is already decoded by the regular scene graph. All we need
+   * to ship is local box + intensity + texture reference.
+   */
+  reflectionProbe?: {
+    /** `m_Mode`: 0 = Baked (scene lighting data), 1 = Custom (uses
+     *  `m_CustomBakedTexture` — this is what we support), 2 = Realtime
+     *  (not supported; falls back to scene.environment). */
+    mode: 'Baked' | 'Custom' | 'Realtime' | 'Unknown';
+    /** Probe influence volume, in local space. Client transforms via
+     *  `matrixWorld` to get world AABB for nearest-probe lookup. */
+    boxSize: Vec3;
+    boxOffset: Vec3;
+    /** When true, reflections use box-projected sampling instead of
+     *  spherical — gives correct-looking reflections on flat walls.
+     *  Client-side implementation is deferred to a later pass; for
+     *  now we surface the flag so future renderers can pick it up. */
+    boxProjection: boolean;
+    /** Multiplier applied on top of `scene.environment` intensity
+     *  (Unity's `m_IntensityMultiplier`, default 1.0). */
+    intensity: number;
+    /** Blend distance at probe boundary (unused in first pass). */
+    blendDistance: number;
+    /** `m_Importance`; higher values win ties. */
+    importance: number;
+    /** Baked cubemap GUID when `mode === 'Custom'`. Baked probes store
+     *  their texture in the `LightingDataAsset` sidecar which we don't
+     *  parse — the client falls back to scene.environment for them. */
+    customBakedTextureGuid?: string;
   };
   children: GameObjectNode[];
 }
@@ -609,6 +717,11 @@ export async function buildGameObjectTree(
           node.camera = extractCamera(c);
           opts.stats.cameras += 1;
           break;
+        case CLASS_REFLECTION_PROBE: {
+          const probe = extractReflectionProbe(c);
+          if (probe) node.reflectionProbe = probe;
+          break;
+        }
         default:
           break;
       }
@@ -716,7 +829,7 @@ export async function buildGameObjectTree(
         // as unpacked and vanish entirely (DM_Floor_*, DM_BLDG_* regression
         // from the previous pass).
         const nativeMeshFilterHits = nativeMeshFilterGuidCounts.get(sourceGuid) ?? 0;
-        applyPrefabModifications(prefabNode, sourcePrefab, mod, {
+        await applyPrefabModifications(prefabNode, sourcePrefab, mod, {
           rootTransformFileID: rootXformCorr,
           rootGameObjectFileID: rootGoCorr,
           nativeMeshFilterCount: nativeMeshFilterHits,
@@ -985,6 +1098,24 @@ export async function parseScene(absPath: string, relPath: string): Promise<Scen
 
   const { settings: renderSettings } = extractRenderSettings(docs);
 
+  // Resolve the skybox material (if any). We do this AFTER the main
+  // materials table is built so nested `parseMaterialByGuid` calls hit
+  // the warm LRU cache. When the skybox is a plain unlit `Skybox/*`
+  // shader the kind classifier picks it up; custom Shader Graph
+  // skyboxes land as `kind: unknown` and the client fall back path
+  // renders the neutral RoomEnvironment so we never ship a black sky.
+  if (renderSettings.skyboxMaterialGuid) {
+    try {
+      const skybox = await parseSkyboxByGuid(renderSettings.skyboxMaterialGuid);
+      if (skybox) renderSettings.skybox = skybox;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[sceneParser] skybox parse failed for guid=${renderSettings.skyboxMaterialGuid.slice(0, 8)}: ${msg}`,
+      );
+    }
+  }
+
   // TEMP DEBUG: dump the first few scene roots' transforms and their first
   // level of children so we can cross-reference against Unity's Hierarchy
   // and Inspector values. Useful to confirm whether
@@ -1083,6 +1214,52 @@ function extractCamera(c: RawDoc): GameObjectNode['camera'] {
     fov: num(body['field of view'], 60),
     near: num(body['near clip plane'], 0.3),
     far: num(body['far clip plane'], 1000),
+  };
+}
+
+function extractReflectionProbe(c: RawDoc): GameObjectNode['reflectionProbe'] {
+  const body = c.body;
+  const modeMap: Record<number, NonNullable<GameObjectNode['reflectionProbe']>['mode']> = {
+    0: 'Baked',
+    1: 'Custom',
+    2: 'Realtime',
+  };
+  const modeRaw = num(body['m_Mode'], 0);
+  const mode = modeMap[modeRaw] ?? 'Unknown';
+
+  const readVec3 = (v: unknown, fb: Vec3): Vec3 => {
+    if (!v || typeof v !== 'object') return fb;
+    const o = v as { x?: number; y?: number; z?: number };
+    return [num(o.x, fb[0]), num(o.y, fb[1]), num(o.z, fb[2])];
+  };
+
+  const boxSize = readVec3(body['m_BoxSize'], [10, 10, 10]);
+  const boxOffset = readVec3(body['m_BoxOffset'], [0, 0, 0]);
+
+  // Unity → three coordinate transform: flip X so the probe volume
+  // matches the already-flipped world. Keeping this local to the probe
+  // extractor means the rest of the scene-transform code doesn't need
+  // to know probes exist.
+  const unityToThreeVec3 = (v: Vec3): Vec3 => [-v[0], v[1], v[2]];
+
+  const custom = body['m_CustomBakedTexture'];
+  let customGuid: string | undefined;
+  if (custom && typeof custom === 'object') {
+    const g = (custom as { guid?: unknown }).guid;
+    if (typeof g === 'string' && /^[0-9a-f]{32}$/i.test(g.trim())) {
+      customGuid = g.trim().toLowerCase();
+    }
+  }
+
+  return {
+    mode,
+    boxSize: unityToThreeVec3(boxSize),
+    boxOffset: unityToThreeVec3(boxOffset),
+    boxProjection: num(body['m_BoxProjection'], 0) >= 0.5,
+    intensity: num(body['m_IntensityMultiplier'], 1),
+    blendDistance: num(body['m_BlendDistance'], 0),
+    importance: num(body['m_Importance'], 1),
+    customBakedTextureGuid: customGuid,
   };
 }
 
@@ -1284,6 +1461,24 @@ function clonePrefabTree(node: GameObjectNode): GameObjectNode {
           removedFbxSubmeshNames: node.renderer.removedFbxSubmeshNames
             ? [...node.renderer.removedFbxSubmeshNames]
             : undefined,
+          // Deep-clone sub-mesh overrides: each entry is a per-name
+          // record of small tuples, so a shallow copy of the outer map
+          // plus tuple spreads keeps the clone fully disconnected from
+          // the source prefab's cache. Crucial because subsequent scene
+          // modifications accumulate onto this clone — mutating the
+          // cached source would leak overrides across scene reloads.
+          subMeshOverrides: node.renderer.subMeshOverrides
+            ? Object.fromEntries(
+                Object.entries(node.renderer.subMeshOverrides).map(([k, v]) => [
+                  k,
+                  {
+                    position: v.position ? ([...v.position] as Vec3) : undefined,
+                    quaternion: v.quaternion ? ([...v.quaternion] as Quat) : undefined,
+                    scale: v.scale ? ([...v.scale] as Vec3) : undefined,
+                  },
+                ]),
+              )
+            : undefined,
         }
       : undefined,
     light: node.light ? { ...node.light, color: [...node.light.color] as [number, number, number, number] } : undefined,
@@ -1337,7 +1532,7 @@ function indexClonedPrefab(root: GameObjectNode): PrefabTreeInfo {
  * the original scan). Modifications whose target is a Transform are mapped
  * to the GameObject on the same GO by way of prefab.byTransformFileID.
  */
-function applyPrefabModifications(
+async function applyPrefabModifications(
   clonedRoot: GameObjectNode,
   prefabInfo: {
     byGOFileID: Map<string, GameObjectNode>;
@@ -1371,12 +1566,29 @@ function applyPrefabModifications(
      *  single-mesh model prefabs disappear. */
     nativeMeshFilterCount?: number;
   },
-): void {
+): Promise<void> {
   const mods = Array.isArray(modBlock['m_Modifications']) ? (modBlock['m_Modifications'] as unknown[]) : [];
   if (mods.length === 0) return;
 
   // Re-index cloned tree so GO fileIDs resolve on OUR copy (not the cached original).
   const cloned = indexClonedPrefab(clonedRoot);
+
+  // For model-prefab roots, pre-load the FBX `.meta` fileID->name table
+  // once per call. This lets us route "sub-Transform" rotation/position/
+  // scale overrides (which don't resolve in `cloned.*` because our synth
+  // tree only has the single root) onto per-sub-mesh override records on
+  // the root's renderer. Without this, the gate below drops every one of
+  // those mods and every affected sub-mesh renders at its FBX-default
+  // orientation — which is exactly how Factory_New_B's `LT_FactoryCon_A.*`
+  // parts were landing 180° off from Unity. Skipped for single-mesh
+  // model prefabs (where the fallback to root is fine) and for non-model
+  // prefabs (whose tree already enumerates every sub-Transform).
+  const fbxAllNames =
+    prefabInfo.isModelPrefab &&
+    clonedRoot.renderer?.renderAllFbxMeshes &&
+    clonedRoot.renderer.meshGuid
+      ? await loadFbxAnyClassNames(clonedRoot.renderer.meshGuid)
+      : undefined;
 
   // Mirror the original prefab's transform -> GO mapping onto our clone by
   // pairing fileIDs in scan order (the tree layout is identical).
@@ -1482,6 +1694,27 @@ function applyPrefabModifications(
         targetFileID === instanceRootAliases?.rootTransformFileID ||
         targetFileID === instanceRootAliases?.rootGameObjectFileID;
       if (isTransformPath && !matchesRootAlias) {
+        // Before dropping, try to route this sub-Transform mod to a
+        // named FBX sub-object. `fbxAllNames` is the `.meta`
+        // fileID->name table (spans Transform + GameObject class IDs),
+        // so a hit here means "this mod targets a real sub-mesh the
+        // client is going to render via `renderAllFbxMeshes`, and we
+        // can attach the override keyed by that sub-mesh's name."
+        // Misses (hash-only Unity 2022+ FBXs, or transforms that don't
+        // correspond to a renderable sub-mesh) keep the old behaviour:
+        // drop silently rather than smear onto the synth root.
+        const subName = fbxAllNames?.get(targetFileID);
+        if (subName && clonedRoot.renderer) {
+          accumulateSubMeshOverride(
+            clonedRoot.renderer,
+            subName,
+            propertyPath,
+            value,
+          );
+          // Don't count these as missed: they've been captured and will
+          // be replayed client-side on the per-sub-mesh group.
+          continue;
+        }
         missed += 1;
         continue;
       }
@@ -1550,6 +1783,23 @@ function applyPrefabModifications(
     console.log(
       `[prefabMod] root='${clonedRoot.name}' mods=${mods.length} hitGo=${hitGo} hitXform=${hitXform} hitComp=${hitComp} fallback=${hitFallback} miss=${missed}`,
     );
+  }
+
+  // Log sub-mesh override accumulation so we can quickly verify
+  // Factory_New_B's ~20 sub-Transform rotations were captured end-to-end.
+  if (prefabInfo.isModelPrefab && clonedRoot.renderer?.subMeshOverrides) {
+    const count = Object.keys(clonedRoot.renderer.subMeshOverrides).length;
+    if (count > 0) {
+      // Show the first few names as a sanity check — picking a
+      // Factory_New_B-style scene should surface `LT_FactoryCon_A*`
+      // and `LT_FactoryWal_A*` entries here.
+      const sample = Object.keys(clonedRoot.renderer.subMeshOverrides)
+        .slice(0, 6)
+        .join(',');
+      console.log(
+        `[subMeshOverrides] root='${clonedRoot.name}' entries=${count} sample=[${sample}]`,
+      );
+    }
   }
 
   // Targeted diagnostic for F_Sample-like model prefabs: dump the root's
@@ -1928,6 +2178,71 @@ function isTransformProperty(propertyPath: string): boolean {
     propertyPath.startsWith('m_LocalScale.') ||
     propertyPath.startsWith('m_LocalEulerAnglesHint.')
   );
+}
+
+/**
+ * Accumulate a single sub-Transform property override onto a model-
+ * prefab's renderer, keyed by FBX sub-object name. The input `value` is
+ * in Unity's coordinate space; we convert into three's convention here
+ * (position x flipped, quaternion y/z negated) so the client can feed it
+ * straight into a `<group>` prop without re-running the conversion.
+ *
+ * Sibling-of-`applyModification`: that one writes to
+ * `node.transform.*`, we write to
+ * `renderer.subMeshOverrides[name].*`. Both share the same property-
+ * path vocabulary so Unity's authoring output parses the same way in
+ * both paths.
+ */
+function accumulateSubMeshOverride(
+  renderer: NonNullable<GameObjectNode['renderer']>,
+  subName: string,
+  propertyPath: string,
+  value: unknown,
+): void {
+  const n =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : NaN;
+  if (!Number.isFinite(n)) return;
+  const [base, comp] = propertyPath.split('.');
+  if (!renderer.subMeshOverrides) renderer.subMeshOverrides = {};
+  const bucket = (renderer.subMeshOverrides[subName] ??= {});
+  switch (base) {
+    case 'm_LocalPosition': {
+      if (!bucket.position) bucket.position = [0, 0, 0];
+      // Unity → three position: negate x. Matches `applyModification`.
+      if (comp === 'x') bucket.position[0] = -n;
+      else if (comp === 'y') bucket.position[1] = n;
+      else if (comp === 'z') bucket.position[2] = n;
+      break;
+    }
+    case 'm_LocalRotation': {
+      // Seed as identity so an override that only touches, e.g., w +
+      // x still produces a valid quaternion for the components Unity
+      // didn't explicitly write (typically they all ship together, but
+      // the parser mustn't assume ordering).
+      if (!bucket.quaternion) bucket.quaternion = [0, 0, 0, 1];
+      if (comp === 'x') bucket.quaternion[0] = n;
+      else if (comp === 'y') bucket.quaternion[1] = -n;
+      else if (comp === 'z') bucket.quaternion[2] = -n;
+      else if (comp === 'w') bucket.quaternion[3] = n;
+      break;
+    }
+    case 'm_LocalScale': {
+      if (!bucket.scale) bucket.scale = [1, 1, 1];
+      if (comp === 'x') bucket.scale[0] = n;
+      else if (comp === 'y') bucket.scale[1] = n;
+      else if (comp === 'z') bucket.scale[2] = n;
+      break;
+    }
+    // m_LocalEulerAnglesHint is Unity authoring metadata — the real
+    // rotation is stored in the full quaternion mods, so ignoring the
+    // hint here keeps us single-source-of-truth.
+    default:
+      break;
+  }
 }
 
 function applyModification(

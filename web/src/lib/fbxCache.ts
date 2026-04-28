@@ -326,26 +326,49 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
 
   const url = apiUrl(`/api/assets/mesh?guid=${encodeURIComponent(guid)}`);
 
-  // 409 from the server means "this is still an LFS pointer — retry
-  // shortly". The server now waits up to ~20 s synchronously and
-  // coalesces concurrent requests into batched git-lfs fetches, so
-  // the first 409 typically only appears on very large blobs. When
-  // we do see one, loop with a longer backoff so we cover pathological
-  // cases (huge FBX, saturated LFS endpoint) without timing out
-  // prematurely. Budget: ~80 s total, matching the scene-fetch
-  // retry budget so the viewer doesn't abandon a mesh while the
-  // scene itself is still loading.
+  // The server signals "still an LFS pointer — retry shortly" via
+  // either the legacy `409 lfs-pointer` status (older servers) or a
+  // `200 OK` with `Content-Type: application/json` and a body of
+  // `{status:'pending', ...}` (current servers — switched to 200 so
+  // the platform reverse proxy doesn't count retry loops as errors).
+  // We also accept whichever the server happens to emit so a client
+  // talking to a freshly-deployed back-end keeps working during the
+  // rollout window.
+  //
+  // The server waits up to ~20 s synchronously and coalesces
+  // concurrent requests into batched git-lfs fetches, so the first
+  // pending response typically only appears on very large blobs.
+  // Budget: ~80 s total, matching the scene-fetch retry budget so
+  // the viewer doesn't abandon a mesh while the scene itself is
+  // still loading.
   const MAX_LFS_RETRIES = 20;
   const LFS_RETRY_MS = 4000;
   let res: Response | null = null;
+  let pendingBody: { status?: unknown } | null = null;
   for (let attempt = 0; attempt <= MAX_LFS_RETRIES; attempt += 1) {
     attempts += 1;
+    pendingBody = null;
     try {
       res = await fetch(url);
     } catch (err) {
       return settle(empty('error', (err as Error).message));
     }
-    if (res.status !== 409) break;
+    let isPending = res.status === 409;
+    if (!isPending && res.ok) {
+      const ct = res.headers.get('Content-Type') || '';
+      if (ct.startsWith('application/json')) {
+        try {
+          const body = (await res.clone().json()) as { status?: unknown };
+          if (body && body.status === 'pending') {
+            isPending = true;
+            pendingBody = body;
+          }
+        } catch {
+          /* not the sentinel */
+        }
+      }
+    }
+    if (!isPending) break;
     if (attempt === MAX_LFS_RETRIES) break;
     await new Promise<void>((r) => setTimeout(r, LFS_RETRY_MS));
   }
@@ -353,11 +376,27 @@ async function fetchAndParse(guid: string): Promise<FbxEntry> {
     return settle(empty('error', 'no response'));
   }
 
-  if (res.status === 409) {
+  if (res.status === 409 || pendingBody?.status === 'pending') {
     return settle(empty('lfs-pointer', 'LFS fetch timed out after retries'));
   }
   if (!res.ok) {
     return settle(empty('missing', `HTTP ${res.status}`));
+  }
+
+  // The server now returns 200 + `{missing:true}` JSON for both
+  // unknown-GUID and unsupported-format cases (used to be 404 / 415).
+  // Detect the sentinel before treating the body as binary FBX bytes,
+  // otherwise FBXLoader.parse would crash on the JSON header.
+  const finalCt = res.headers.get('Content-Type') || '';
+  if (finalCt.startsWith('application/json')) {
+    let reason = 'missing';
+    try {
+      const body = (await res.clone().json()) as { reason?: unknown };
+      if (typeof body.reason === 'string') reason = body.reason;
+    } catch {
+      /* keep generic */
+    }
+    return settle(empty('missing', reason));
   }
 
   let buf: ArrayBuffer;
